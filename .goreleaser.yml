@@ -1,0 +1,67 @@
+version: 2
+
+project_name: forge
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: forge
+    main: ./cmd/forge
+    binary: forge
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X github.com/sametkarademir/forge/internal/build.Version={{.Version}}
+      - -X github.com/sametkarademir/forge/internal/build.Commit={{.Commit}}
+      - -X github.com/sametkarademir/forge/internal/build.Date={{.Date}}
+
+archives:
+  - id: forge
+    formats: ["tar.gz"]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: ["zip"]
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+release:
+  github:
+    owner: sametkarademir
+    name: forge
+  draft: false
+  prerelease: auto
+
+brews:
+  - name: forge
+    repository:
+      owner: sametkarademir
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+      branch: main
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "chore: update forge to {{ .Tag }}"
+    homepage: "https://github.com/sametkarademir/forge"
+    description: "Developer productivity CLI for macOS"
+    license: "MIT"
+    install: |
+      bin.install "forge"
+    test: |
+      system "#{bin}/forge", "--version"

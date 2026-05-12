@@ -1,0 +1,20 @@
+# Binaries
+bin/
+/forge
+*.exe
+*.out
+*.test
+
+# Go build artifacts
+vendor/
+*.prof
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Config
+*.env
