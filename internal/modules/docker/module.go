@@ -20,7 +20,9 @@ func (m *dockerModule) Command() *cobra.Command {
 		Short: "Manage per-project database containers",
 	}
 
-	root.AddCommand(commands.NewCreateCommand())
+	createCmd := commands.NewCreateCommand()
+	createCmd.AddCommand(commands.NewWizardCommand())
+	root.AddCommand(createCmd)
 	root.AddCommand(commands.NewListCommand())
 	root.AddCommand(commands.NewStatusCommand())
 	root.AddCommand(commands.NewConnCommand())

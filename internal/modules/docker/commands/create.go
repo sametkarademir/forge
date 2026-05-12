@@ -14,6 +14,7 @@ func NewCreateCommand() *cobra.Command {
 		user     string
 		password string
 		db       string
+		port     int
 	)
 
 	cmd := &cobra.Command{
@@ -38,6 +39,7 @@ func NewCreateCommand() *cobra.Command {
 				User:        user,
 				Password:    password,
 				Database:    db,
+				HostPort:    port,
 			})
 			if err != nil {
 				logger.Error(err.Error())
@@ -53,6 +55,7 @@ func NewCreateCommand() *cobra.Command {
 	cmd.Flags().StringVar(&user, "user", "", "Database username (default: config)")
 	cmd.Flags().StringVar(&password, "password", "", "Database password (default: config)")
 	cmd.Flags().StringVar(&db, "db", "", "Database name (default: config)")
+	cmd.Flags().IntVar(&port, "port", 0, "Host port (default: auto-allocate from config range)")
 
 	return cmd
 }
