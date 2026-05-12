@@ -1,6 +1,8 @@
 name: CI / Release
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
 
@@ -39,6 +41,7 @@ jobs:
         run: go test ./...
 
   release:
+    if: github.event_name == 'push'
     needs: lint-and-test
     runs-on: ubuntu-latest
     steps:
