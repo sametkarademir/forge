@@ -1,6 +1,7 @@
 # Binaries
 bin/
 /forge
+/shftcli
 *.exe
 *.out
 *.test
