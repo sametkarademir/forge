@@ -19,6 +19,14 @@ import (
 
 var projectNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
+// ValidateProjectName returns an error if name does not satisfy the naming rules.
+func ValidateProjectName(name string) error {
+	if !projectNameRe.MatchString(name) {
+		return fmt.Errorf("must match ^[a-z0-9][a-z0-9-]{0,62}$")
+	}
+	return nil
+}
+
 // ProjectInfo represents a forge-managed container's state.
 type ProjectInfo struct {
 	Name             string
@@ -43,12 +51,13 @@ type CreateOptions struct {
 	User        string
 	Password    string
 	Database    string
+	HostPort    int // 0 = auto-allocate from config range
 }
 
 // CreateProject validates, allocates, and starts a new database container for a project.
 func CreateProject(ctx context.Context, opts CreateOptions) (*ProjectInfo, error) {
-	if !projectNameRe.MatchString(opts.ProjectName) {
-		return nil, fmt.Errorf("invalid project name %q — must match ^[a-z0-9][a-z0-9-]{0,62}$", opts.ProjectName)
+	if err := ValidateProjectName(opts.ProjectName); err != nil {
+		return nil, fmt.Errorf("invalid project name %q — %w", opts.ProjectName, err)
 	}
 
 	eng, ok := engines.Get(opts.Engine)
@@ -72,12 +81,17 @@ func CreateProject(ctx context.Context, opts CreateOptions) (*ProjectInfo, error
 		)
 	}
 
-	port, err := NextFreePort(config.PortRangeStart(), config.PortRangeEnd())
-	if err != nil {
-		return nil, fmt.Errorf(
-			"port range %d–%d is exhausted — increase docker.port_range_end in ~/.forge/config.yaml",
-			config.PortRangeStart(), config.PortRangeEnd(),
-		)
+	port := opts.HostPort
+	if port == 0 {
+		port, err = NextFreePort(config.PortRangeStart(), config.PortRangeEnd())
+		if err != nil {
+			return nil, fmt.Errorf(
+				"port range %d–%d is exhausted — increase docker.port_range_end in ~/.forge/config.yaml",
+				config.PortRangeStart(), config.PortRangeEnd(),
+			)
+		}
+	} else if !IsPortFree(port) {
+		return nil, fmt.Errorf("port %d is occupied by another process", port)
 	}
 
 	if err := dc.EnsureNetwork(ctx, NetworkName()); err != nil {
