@@ -1,8 +1,7 @@
 package commands
 
 import (
-	"fmt"
-	"time"
+	"strconv"
 
 	"github.com/sametkarademir/forge/internal/core/logger"
 	"github.com/sametkarademir/forge/internal/core/ui"
@@ -10,47 +9,49 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// NewListCommand returns the command that lists all presets and their container status.
 func NewListCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
-		Short: "List all forge-managed database containers",
+		Short: "List all presets and their container status",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			infos, err := service.ListProjects(cmd.Context())
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			rows, err := service.ListAll(cmd.Context())
 			if err != nil {
 				logger.Error(err.Error())
 				return err
 			}
 
-			if len(infos) == 0 {
-				fmt.Println("No managed containers found.")
+			if len(rows) == 0 {
+				logger.Info("No presets or managed containers found.")
 				return nil
 			}
 
-			rows := make([][]string, 0, len(infos))
-			for _, info := range infos {
-				rows = append(rows, []string{
-					info.Name,
-					info.Engine,
-					info.Status,
-					fmt.Sprintf("%d", info.HostPort),
-					formatUptime(info.Uptime),
+			tableRows := make([][]string, 0, len(rows))
+			for _, r := range rows {
+				port := ""
+				if r.HostPort > 0 {
+					port = strconv.Itoa(r.HostPort)
+				}
+				created := ""
+				if !r.CreatedAt.IsZero() {
+					created = r.CreatedAt.Format("2006-01-02")
+				}
+				tableRows = append(tableRows, []string{
+					r.Name,
+					r.Engine,
+					r.Image,
+					port,
+					r.Status,
+					created,
 				})
 			}
-			ui.RenderTable([]string{"PROJECT", "ENGINE", "STATUS", "PORT", "UPTIME"}, rows)
+
+			ui.RenderTable(
+				[]string{"PRESET", "ENGINE", "IMAGE", "PORT", "STATUS", "CREATED"},
+				tableRows,
+			)
 			return nil
 		},
 	}
-}
-
-func formatUptime(d time.Duration) string {
-	if d == 0 {
-		return "—"
-	}
-	h := int(d.Hours())
-	m := int(d.Minutes()) % 60
-	if h > 0 {
-		return fmt.Sprintf("%dh %dm", h, m)
-	}
-	return fmt.Sprintf("%dm", m)
 }
