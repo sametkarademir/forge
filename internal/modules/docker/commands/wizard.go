@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -18,7 +19,7 @@ func NewWizardCommand() *cobra.Command {
 		Short: "Interactively create a managed database container",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			opts, confirmed, err := runWizard()
+			opts, confirmed, err := runWizard(cmd.Context())
 			if err != nil {
 				logger.Error(err.Error())
 				return err
@@ -37,7 +38,7 @@ func NewWizardCommand() *cobra.Command {
 	}
 }
 
-func runWizard() (service.CreateOptions, bool, error) {
+func runWizard(ctx context.Context) (service.CreateOptions, bool, error) {
 	logger.Info("forge docker create wizard — answer each prompt (Enter = accept default)\n")
 
 	// 1. Project name
@@ -58,13 +59,8 @@ func runWizard() (service.CreateOptions, bool, error) {
 	}
 	eng, _ := engines.Get(engineName)
 
-	// 3. Image
-	image, err := ui.Text("Docker image", eng.DefaultImage(), func(s string) error {
-		if s == "" {
-			return fmt.Errorf("image cannot be empty")
-		}
-		return nil
-	})
+	// 3. Image — shows locally-installed images for this engine first.
+	image, err := promptImage(ctx, engineName)
 	if err != nil {
 		return service.CreateOptions{}, false, err
 	}
@@ -81,7 +77,7 @@ func runWizard() (service.CreateOptions, bool, error) {
 	}
 
 	// 5. Password (no default — re-prompt on engine rule violations)
-	password, err := ui.Password("Database password", eng.ValidatePassword)
+	password, err := promptPassword(eng)
 	if err != nil {
 		return service.CreateOptions{}, false, err
 	}
