@@ -32,6 +32,9 @@ func NewRunCommand() *cobra.Command {
 			if info.ConnectionString != "" {
 				logger.Info("  Connection: " + info.ConnectionString)
 			}
+			for _, ep := range info.Endpoints {
+				logger.Info("  " + ep.Label + ": " + ep.Value)
+			}
 			return nil
 		},
 	}

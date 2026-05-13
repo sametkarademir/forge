@@ -114,7 +114,7 @@ func runCreateWizard(ctx context.Context) error {
 
 	// Steps 7–8: Save preset and pull image
 	p := &preset.Preset{
-		SchemaVersion: 1,
+		SchemaVersion: 2,
 		Name:          presetName,
 		Engine:        engineName,
 		Image:         image,
@@ -149,6 +149,9 @@ func runCreateWizard(ctx context.Context) error {
 	}
 	if info.ConnectionString != "" {
 		logger.Info("  Connection: " + info.ConnectionString)
+	}
+	for _, ep := range info.Endpoints {
+		logger.Info("  " + ep.Label + ": " + ep.Value)
 	}
 	return nil
 }

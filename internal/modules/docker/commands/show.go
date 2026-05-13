@@ -37,8 +37,11 @@ func NewShowCommand() *cobra.Command {
 			if view.HostPort > 0 {
 				rows = append(rows, []string{"Host port", strconv.Itoa(view.HostPort)})
 			}
-			if view.DSN != "" {
-				rows = append(rows, []string{"Connection", view.DSN})
+			if view.Primary != "" {
+				rows = append(rows, []string{"Connection", view.Primary})
+			}
+			for _, ep := range view.Endpoints {
+				rows = append(rows, []string{ep.Label, ep.Value})
 			}
 
 			ui.RenderTable([]string{"Setting", "Value"}, rows)
