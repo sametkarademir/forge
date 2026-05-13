@@ -36,8 +36,10 @@ func (p *postgres) EnvVars(user, password, db string) map[string]string {
 	}
 }
 
-func (p *postgres) ConnectionString(host string, hostPort int, user, password, db string) string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s", user, password, host, hostPort, db)
+func (p *postgres) ConnectionInfo(a ConnArgs) ConnInfo {
+	raw := fmt.Sprintf("postgres://%s:%s@%s:%d/%s", a.User, a.Password, a.Host, a.HostPort, a.Database)
+	masked := strings.Replace(raw, ":"+a.Password+"@", ":****@", 1)
+	return ConnInfo{Primary: raw, MaskedPrimary: masked}
 }
 
 func (p *postgres) ValidatePassword(password string) error { return nil }

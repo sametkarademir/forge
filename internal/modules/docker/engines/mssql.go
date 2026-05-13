@@ -25,11 +25,13 @@ func (m *mssql) EnvVars(user, password, db string) map[string]string {
 	}
 }
 
-func (m *mssql) ConnectionString(host string, hostPort int, user, password, db string) string {
-	return fmt.Sprintf(
+func (m *mssql) ConnectionInfo(a ConnArgs) ConnInfo {
+	raw := fmt.Sprintf(
 		"Server=%s,%d;Database=%s;User Id=sa;Password=%s;TrustServerCertificate=true",
-		host, hostPort, db, password,
+		a.Host, a.HostPort, a.Database, a.Password,
 	)
+	masked := strings.Replace(raw, "Password="+a.Password+";", "Password=****;", 1)
+	return ConnInfo{Primary: raw, MaskedPrimary: masked}
 }
 
 // ValidatePassword enforces SQL Server 2019+ SA_PASSWORD complexity rules.

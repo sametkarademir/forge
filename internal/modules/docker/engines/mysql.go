@@ -1,6 +1,9 @@
 package engines
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type mysql struct{}
 
@@ -22,8 +25,10 @@ func (m *mysql) EnvVars(user, password, db string) map[string]string {
 	}
 }
 
-func (m *mysql) ConnectionString(host string, hostPort int, user, password, db string) string {
-	return fmt.Sprintf("mysql://%s:%s@%s:%d/%s", user, password, host, hostPort, db)
+func (m *mysql) ConnectionInfo(a ConnArgs) ConnInfo {
+	raw := fmt.Sprintf("mysql://%s:%s@%s:%d/%s", a.User, a.Password, a.Host, a.HostPort, a.Database)
+	masked := strings.Replace(raw, ":"+a.Password+"@", ":****@", 1)
+	return ConnInfo{Primary: raw, MaskedPrimary: masked}
 }
 
 func (m *mysql) ValidatePassword(password string) error { return nil }

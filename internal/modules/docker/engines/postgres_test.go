@@ -1,6 +1,27 @@
 package engines
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestPostgresConnectionInfo(t *testing.T) {
+	p := &postgres{}
+	ci := p.ConnectionInfo(ConnArgs{Host: "localhost", HostPort: 5432, User: "app", Password: "s3cr3t", Database: "mydb"})
+	wantPrimary := "postgres://app:s3cr3t@localhost:5432/mydb"
+	if ci.Primary != wantPrimary {
+		t.Errorf("Primary = %q, want %q", ci.Primary, wantPrimary)
+	}
+	if strings.Contains(ci.MaskedPrimary, "s3cr3t") {
+		t.Errorf("MaskedPrimary should not contain password, got %q", ci.MaskedPrimary)
+	}
+	if !strings.Contains(ci.MaskedPrimary, "****") {
+		t.Errorf("MaskedPrimary should contain ****, got %q", ci.MaskedPrimary)
+	}
+	if ci.Endpoints != nil {
+		t.Errorf("Endpoints should be nil for postgres, got %v", ci.Endpoints)
+	}
+}
 
 func TestPgMajorVersion(t *testing.T) {
 	cases := []struct {
