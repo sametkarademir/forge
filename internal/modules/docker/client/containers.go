@@ -69,12 +69,6 @@ func (dc *DockerClient) Inspect(ctx context.Context, idOrName string) (types.Con
 	return dc.cli.ContainerInspect(ctx, idOrName)
 }
 
-// FindByNamePrefix returns containers whose name starts with "forge-<project>-".
-func (dc *DockerClient) FindByNamePrefix(ctx context.Context, project string) ([]types.Container, error) {
-	f := filters.NewArgs(filters.KeyValuePair{Key: "name", Value: "forge-" + project + "-"})
-	return dc.cli.ContainerList(ctx, container.ListOptions{All: true, Filters: f})
-}
-
 // RunContainer creates and starts a container from RunConfig.
 // It attempts a best-effort image pull before creating the container;
 // use PullImage for explicit pre-pull with error surfacing.

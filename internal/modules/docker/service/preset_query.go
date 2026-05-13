@@ -39,7 +39,7 @@ func RemovePreset(ctx context.Context, name string, mode RemoveMode) error {
 			if rmErr := dc.RemoveContainer(ctx, legacy.ID); rmErr != nil {
 				return fmt.Errorf("remove legacy container: %w", rmErr)
 			}
-			_ = dc.VolumeRemove(ctx, VolumeName(name, engineName))
+			_ = dc.VolumeRemove(ctx, "forge-"+name+"-"+engineName+"-data")
 		}
 		if !presetExists {
 			return nil

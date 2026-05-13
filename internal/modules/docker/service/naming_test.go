@@ -2,31 +2,30 @@ package service
 
 import "testing"
 
-func TestContainerName(t *testing.T) {
+func TestPresetContainerName(t *testing.T) {
 	tests := []struct {
-		project, engine, want string
+		preset, want string
 	}{
-		{"myapp", "postgres", "forge-myapp-postgres"},
-		{"api", "mysql", "forge-api-mysql"},
-		{"svc", "mssql", "forge-svc-mssql"},
+		{"myapp", "forge-myapp"},
+		{"wp-pg", "forge-wp-pg"},
 	}
 	for _, tc := range tests {
-		if got := ContainerName(tc.project, tc.engine); got != tc.want {
-			t.Errorf("ContainerName(%q, %q) = %q, want %q", tc.project, tc.engine, got, tc.want)
+		if got := PresetContainerName(tc.preset); got != tc.want {
+			t.Errorf("PresetContainerName(%q) = %q, want %q", tc.preset, got, tc.want)
 		}
 	}
 }
 
-func TestVolumeName(t *testing.T) {
+func TestPresetVolumeName(t *testing.T) {
 	tests := []struct {
-		project, engine, want string
+		preset, want string
 	}{
-		{"myapp", "postgres", "forge-myapp-postgres-data"},
-		{"api", "mysql", "forge-api-mysql-data"},
+		{"myapp", "forge-myapp-data"},
+		{"wp-pg", "forge-wp-pg-data"},
 	}
 	for _, tc := range tests {
-		if got := VolumeName(tc.project, tc.engine); got != tc.want {
-			t.Errorf("VolumeName(%q, %q) = %q, want %q", tc.project, tc.engine, got, tc.want)
+		if got := PresetVolumeName(tc.preset); got != tc.want {
+			t.Errorf("PresetVolumeName(%q) = %q, want %q", tc.preset, got, tc.want)
 		}
 	}
 }
