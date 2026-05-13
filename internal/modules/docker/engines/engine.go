@@ -10,8 +10,9 @@ import (
 type Engine interface {
 	Name() string
 	DefaultImage() string
+	ImageRepos() []string // Docker Hub / registry repo names used by this engine, for filtering local images
 	DefaultPort() int
-	DataDir() string // volume mount target inside the container
+	DataDir(image string) string // volume mount target inside the container
 	EnvVars(user, password, db string) map[string]string
 	ConnectionString(host string, hostPort int, user, password, db string) string
 	ValidatePassword(password string) error

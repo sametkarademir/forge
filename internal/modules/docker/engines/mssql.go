@@ -10,11 +10,12 @@ type mssql struct{}
 
 func init() { Register(&mssql{}) }
 
-func (m *mssql) Name() string           { return "mssql" }
-func (m *mssql) DefaultImage() string   { return "mcr.microsoft.com/mssql/server:2022-latest" }
-func (m *mssql) DefaultPort() int       { return 1433 }
-func (m *mssql) DataDir() string        { return "/var/opt/mssql" }
-func (m *mssql) PasswordEnvKey() string { return "SA_PASSWORD" }
+func (m *mssql) Name() string            { return "mssql" }
+func (m *mssql) DefaultImage() string    { return "mcr.microsoft.com/mssql/server:2022-latest" }
+func (m *mssql) ImageRepos() []string    { return []string{"mcr.microsoft.com/mssql/server"} }
+func (m *mssql) DefaultPort() int        { return 1433 }
+func (m *mssql) DataDir(_ string) string { return "/var/opt/mssql" }
+func (m *mssql) PasswordEnvKey() string  { return "SA_PASSWORD" }
 
 func (m *mssql) EnvVars(user, password, db string) map[string]string {
 	return map[string]string{

@@ -32,3 +32,14 @@ func DefaultDB() string            { return viper.GetString("docker.default_db")
 func PortRangeStart() int          { return viper.GetInt("docker.port_range_start") }
 func PortRangeEnd() int            { return viper.GetInt("docker.port_range_end") }
 func ReadinessTimeoutSeconds() int { return viper.GetInt("docker.readiness_timeout_seconds") }
+
+// EngineDefaultImage returns the user-configured default image for engineName, or "" if unset.
+func EngineDefaultImage(engineName string) string {
+	return viper.GetString("docker.engines." + engineName + ".default_image")
+}
+
+// Set writes key=value to ~/.forge/config.yaml. key must be a valid dotted viper key.
+func Set(key, value string) error {
+	viper.Set(key, value)
+	return viper.WriteConfig()
+}

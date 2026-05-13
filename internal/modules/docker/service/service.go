@@ -110,10 +110,7 @@ func CreateProject(ctx context.Context, opts CreateOptions) (*ProjectInfo, error
 		return nil, fmt.Errorf("failed to create volume: %w", err)
 	}
 
-	image := opts.Image
-	if image == "" {
-		image = eng.DefaultImage()
-	}
+	image := resolveImage(opts.Image, opts.Engine, eng)
 
 	containerName := ContainerName(opts.ProjectName, opts.Engine)
 	containerLabels := map[string]string{
@@ -132,7 +129,7 @@ func CreateProject(ctx context.Context, opts CreateOptions) (*ProjectInfo, error
 		EnvVars:       eng.EnvVars(opts.User, opts.Password, opts.Database),
 		HostPort:      port,
 		ContainerPort: eng.DefaultPort(),
-		VolumeTarget:  eng.DataDir(),
+		VolumeTarget:  eng.DataDir(image),
 		VolumeName:    volumeName,
 		Labels:        containerLabels,
 		NetworkName:   NetworkName(),
@@ -339,6 +336,18 @@ func RemoveProject(ctx context.Context, project string) error {
 	_ = dc.VolumeRemove(ctx, VolumeName(project, engineName))
 	dc.NetworkDisconnect(ctx, NetworkName(), inspected.ID)
 	return nil
+}
+
+// resolveImage returns the Docker image to use, in priority order:
+// explicit flag value → per-engine config override → engine compiled default.
+func resolveImage(flagImage, engineName string, eng engines.Engine) string {
+	if flagImage != "" {
+		return flagImage
+	}
+	if override := config.EngineDefaultImage(engineName); override != "" {
+		return override
+	}
+	return eng.DefaultImage()
 }
 
 // --- helpers ---

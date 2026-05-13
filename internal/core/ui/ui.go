@@ -5,7 +5,13 @@ import (
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/olekukonko/tablewriter"
+	"golang.org/x/term"
 )
+
+// IsInteractive reports whether stdin is an interactive terminal.
+func IsInteractive() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
+}
 
 // Confirm shows an interactive yes/no prompt. Returns false on non-TTY or interrupt.
 func Confirm(question string) (bool, error) {

@@ -6,11 +6,12 @@ type mysql struct{}
 
 func init() { Register(&mysql{}) }
 
-func (m *mysql) Name() string           { return "mysql" }
-func (m *mysql) DefaultImage() string   { return "mysql:8.4" }
-func (m *mysql) DefaultPort() int       { return 3306 }
-func (m *mysql) DataDir() string        { return "/var/lib/mysql" }
-func (m *mysql) PasswordEnvKey() string { return "MYSQL_PASSWORD" }
+func (m *mysql) Name() string            { return "mysql" }
+func (m *mysql) DefaultImage() string    { return "mysql:8.4" }
+func (m *mysql) ImageRepos() []string    { return []string{"mysql"} }
+func (m *mysql) DefaultPort() int        { return 3306 }
+func (m *mysql) DataDir(_ string) string { return "/var/lib/mysql" }
+func (m *mysql) PasswordEnvKey() string  { return "MYSQL_PASSWORD" }
 
 func (m *mysql) EnvVars(user, password, db string) map[string]string {
 	return map[string]string{

@@ -188,6 +188,52 @@ func (dc *DockerClient) NetworkDisconnect(ctx context.Context, networkName, cont
 	_ = dc.cli.NetworkDisconnect(ctx, networkName, containerID, true)
 }
 
+// ImageRef is a locally-available Docker image name and tag.
+type ImageRef struct {
+	Repo string
+	Tag  string
+}
+
+// String returns the canonical "repo:tag" form.
+func (r ImageRef) String() string { return r.Repo + ":" + r.Tag }
+
+// ListImages returns all locally-available images whose repo matches any of the given repos.
+// Returns nil, nil when no images are found or on any non-fatal error so callers degrade gracefully.
+func (dc *DockerClient) ListImages(ctx context.Context, repos []string) ([]ImageRef, error) {
+	if len(repos) == 0 {
+		return nil, nil
+	}
+
+	seen := map[string]bool{}
+	var result []ImageRef
+
+	for _, repo := range repos {
+		f := filters.NewArgs(filters.KeyValuePair{Key: "reference", Value: repo})
+		images, err := dc.cli.ImageList(ctx, image.ListOptions{Filters: f})
+		if err != nil {
+			return nil, nil
+		}
+		for _, img := range images {
+			for _, tag := range img.RepoTags {
+				if tag == "<none>:<none>" || tag == "" {
+					continue
+				}
+				parts := strings.SplitN(tag, ":", 2)
+				if len(parts) != 2 || parts[1] == "" {
+					continue
+				}
+				ref := ImageRef{Repo: parts[0], Tag: parts[1]}
+				key := ref.String()
+				if !seen[key] {
+					seen[key] = true
+					result = append(result, ref)
+				}
+			}
+		}
+	}
+	return result, nil
+}
+
 func isNotFoundError(err error) bool {
 	if err == nil {
 		return false
