@@ -32,14 +32,16 @@ type ContainerInfo struct {
 	Image            string
 	CreatedAt        time.Time
 	ConnectionString string
+	Endpoints        []engines.Endpoint
 }
 
 // PresetView is returned by ShowPreset.
 type PresetView struct {
-	Preset   *preset.Preset
-	Status   string
-	HostPort int
-	DSN      string // password-masked; empty if not running
+	Preset    *preset.Preset
+	Status    string
+	HostPort  int
+	Primary   string             // password-masked primary connection string; empty if not running
+	Endpoints []engines.Endpoint // additional endpoints; nil for DB engines
 }
 
 // RemoveMode controls which resources RemovePreset deletes.
@@ -211,18 +213,25 @@ func RunPreset(ctx context.Context, name string, opts RunOptions) (*ContainerInf
 		waitForPresetReady(port, readinessTimeout(opts.Timeout))
 	}
 
+	ci := eng.ConnectionInfo(engines.ConnArgs{
+		Host:     "localhost",
+		HostPort: port,
+		User:     p.Username,
+		Password: p.Password,
+		Database: p.Database,
+		Options:  p.Options,
+	})
 	return &ContainerInfo{
-		PresetName:    name,
-		Engine:        p.Engine,
-		ContainerName: containerName,
-		VolumeName:    volName,
-		HostPort:      port,
-		Status:        "running",
-		Image:         imgTag,
-		CreatedAt:     now,
-		ConnectionString: eng.ConnectionString(
-			"localhost", port, p.Username, p.Password, p.Database,
-		),
+		PresetName:       name,
+		Engine:           p.Engine,
+		ContainerName:    containerName,
+		VolumeName:       volName,
+		HostPort:         port,
+		Status:           "running",
+		Image:            imgTag,
+		CreatedAt:        now,
+		ConnectionString: ci.Primary,
+		Endpoints:        ci.Endpoints,
 	}, nil
 }
 

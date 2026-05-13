@@ -93,8 +93,16 @@ func ShowPreset(ctx context.Context, name string) (*PresetView, error) {
 	if c.State.Running {
 		view.Status = "running"
 		if eng, ok := engines.Get(p.Engine); ok {
-			raw := eng.ConnectionString("localhost", port, p.Username, p.Password, p.Database)
-			view.DSN = maskPasswordInDSN(raw)
+			ci := eng.ConnectionInfo(engines.ConnArgs{
+				Host:     "localhost",
+				HostPort: port,
+				User:     p.Username,
+				Password: p.Password,
+				Database: p.Database,
+				Options:  p.Options,
+			})
+			view.Primary = ci.MaskedPrimary
+			view.Endpoints = ci.Endpoints
 		}
 	} else {
 		view.Status = c.State.Status // "exited", "paused", etc.
@@ -238,7 +246,15 @@ func ConnString(ctx context.Context, name string) (string, error) {
 	if !ok {
 		return "", engines.ErrUnknownEngine(p.Engine)
 	}
-	return eng.ConnectionString("localhost", port, p.Username, p.Password, p.Database), nil
+	ci := eng.ConnectionInfo(engines.ConnArgs{
+		Host:     "localhost",
+		HostPort: port,
+		User:     p.Username,
+		Password: p.Password,
+		Database: p.Database,
+		Options:  p.Options,
+	})
+	return ci.Primary, nil
 }
 
 // extractLegacyName derives a human-readable name from a legacy container.

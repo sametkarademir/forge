@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"strings"
 	"time"
 
 	dockertypes "github.com/docker/docker/api/types"
@@ -26,10 +25,20 @@ func buildContainerInfo(c *dockertypes.ContainerJSON, p *preset.Preset) *Contain
 		id = id[:12]
 	}
 
-	var dsn string
+	var connStr string
+	var endpoints []engines.Endpoint
 	if p != nil {
 		if eng, ok := engines.Get(engineName); ok {
-			dsn = eng.ConnectionString("localhost", port, p.Username, p.Password, p.Database)
+			ci := eng.ConnectionInfo(engines.ConnArgs{
+				Host:     "localhost",
+				HostPort: port,
+				User:     p.Username,
+				Password: p.Password,
+				Database: p.Database,
+				Options:  p.Options,
+			})
+			connStr = ci.Primary
+			endpoints = ci.Endpoints
 		}
 	}
 
@@ -43,7 +52,8 @@ func buildContainerInfo(c *dockertypes.ContainerJSON, p *preset.Preset) *Contain
 		Status:           c.State.Status,
 		Image:            c.Config.Image,
 		CreatedAt:        createdAt,
-		ConnectionString: dsn,
+		ConnectionString: connStr,
+		Endpoints:        endpoints,
 	}
 }
 
@@ -52,32 +62,6 @@ func readinessTimeout(override int) int {
 		return override
 	}
 	return config.ReadinessTimeoutSeconds()
-}
-
-func maskPasswordInDSN(dsn string) string {
-	// postgres://user:pass@host:port/db
-	if idx := strings.Index(dsn, "://"); idx != -1 {
-		rest := dsn[idx+3:]
-		atIdx := strings.LastIndex(rest, "@")
-		if atIdx != -1 {
-			userPass := rest[:atIdx]
-			colonIdx := strings.Index(userPass, ":")
-			if colonIdx != -1 {
-				return dsn[:idx+3] + userPass[:colonIdx+1] + "****" + "@" + rest[atIdx+1:]
-			}
-		}
-	}
-	// mssql: Server=…;Password=val;
-	if strings.HasPrefix(dsn, "Server=") {
-		parts := strings.Split(dsn, ";")
-		for i, p := range parts {
-			if strings.HasPrefix(strings.ToLower(p), "password=") {
-				parts[i] = "Password=****"
-			}
-		}
-		return strings.Join(parts, ";")
-	}
-	return dsn
 }
 
 func waitForPresetReady(port, timeoutSecs int) {
