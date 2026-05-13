@@ -17,12 +17,12 @@ func (m *dockerModule) Name() string { return "docker" }
 func (m *dockerModule) Command() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "docker",
-		Short: "Manage per-project database containers",
+		Short: "Manage database container presets",
 	}
 
-	createCmd := commands.NewCreateCommand()
-	createCmd.AddCommand(commands.NewWizardCommand())
-	root.AddCommand(createCmd)
+	root.AddCommand(commands.NewCreateCommand())
+	root.AddCommand(commands.NewRunCommand())
+	root.AddCommand(commands.NewShowCommand())
 	root.AddCommand(commands.NewListCommand())
 	root.AddCommand(commands.NewStatusCommand())
 	root.AddCommand(commands.NewConnCommand())

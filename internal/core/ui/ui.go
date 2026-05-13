@@ -13,10 +13,15 @@ func IsInteractive() bool {
 	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
-// Confirm shows an interactive yes/no prompt. Returns false on non-TTY or interrupt.
+// Confirm shows an interactive yes/no prompt defaulting to No.
 func Confirm(question string) (bool, error) {
+	return ConfirmDefault(question, false)
+}
+
+// ConfirmDefault shows an interactive yes/no prompt with an explicit default.
+func ConfirmDefault(question string, defaultYes bool) (bool, error) {
 	var answer bool
-	prompt := &survey.Confirm{Message: question}
+	prompt := &survey.Confirm{Message: question, Default: defaultYes}
 	err := survey.AskOne(prompt, &answer)
 	return answer, err
 }

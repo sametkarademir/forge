@@ -1,128 +1,142 @@
 package commands
 
 import (
+	"context"
 	"fmt"
+	"strconv"
+	"time"
 
-	"github.com/sametkarademir/forge/internal/core/config"
 	"github.com/sametkarademir/forge/internal/core/logger"
 	"github.com/sametkarademir/forge/internal/core/ui"
 	"github.com/sametkarademir/forge/internal/modules/docker/engines"
+	"github.com/sametkarademir/forge/internal/modules/docker/preset"
 	"github.com/sametkarademir/forge/internal/modules/docker/service"
 	"github.com/spf13/cobra"
 )
 
+// NewCreateCommand returns the interactive preset-creation wizard.
 func NewCreateCommand() *cobra.Command {
-	var (
-		engine   string
-		image    string
-		user     string
-		password string
-		db       string
-		port     int
-	)
-
-	cmd := &cobra.Command{
-		Use:   "create <project>",
-		Short: "Create a managed database container for a project",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			interactive := ui.IsInteractive()
-
-			// Engine: required. Prompt when missing and stdin is a TTY.
-			if engine == "" {
-				if !interactive {
-					return fmt.Errorf("required flag \"engine\" not set")
-				}
-				var err error
-				engine, err = promptEngine()
-				if err != nil {
-					logger.Error(err.Error())
-					return err
-				}
-			}
-
-			eng, ok := engines.Get(engine)
-			if !ok {
-				err := engines.ErrUnknownEngine(engine)
-				logger.Error(err.Error())
-				return err
-			}
-
-			// Image: prompt when missing and interactive.
-			if image == "" && interactive {
-				var err error
-				image, err = promptImage(cmd.Context(), engine)
-				if err != nil {
-					logger.Error(err.Error())
-					return err
-				}
-			}
-
-			// User
-			if user == "" {
-				if interactive {
-					var err error
-					user, err = promptUser()
-					if err != nil {
-						logger.Error(err.Error())
-						return err
-					}
-				} else {
-					user = config.DefaultUser()
-				}
-			}
-
-			// Password
-			if password == "" {
-				if interactive {
-					var err error
-					password, err = promptPassword(eng)
-					if err != nil {
-						logger.Error(err.Error())
-						return err
-					}
-				} else {
-					password = config.DefaultPassword()
-				}
-			}
-
-			// DB name
-			if db == "" {
-				if interactive {
-					var err error
-					db, err = promptDB()
-					if err != nil {
-						logger.Error(err.Error())
-						return err
-					}
-				} else {
-					db = config.DefaultDB()
-				}
-			}
-
-			_, err := service.CreateProject(cmd.Context(), service.CreateOptions{
-				ProjectName: args[0],
-				Engine:      engine,
-				Image:       image,
-				User:        user,
-				Password:    password,
-				Database:    db,
-				HostPort:    port,
-			})
-			if err != nil {
-				logger.Error(err.Error())
-				return err
+	return &cobra.Command{
+		Use:   "create",
+		Short: "Create a database preset (interactive wizard)",
+		Args: func(_ *cobra.Command, args []string) error {
+			if len(args) > 0 {
+				return fmt.Errorf("'create' takes no arguments — run it bare: forge docker create")
 			}
 			return nil
 		},
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if !ui.IsInteractive() {
+				return fmt.Errorf("forge docker create requires an interactive terminal")
+			}
+			return runCreateWizard(cmd.Context())
+		},
+	}
+}
+
+func runCreateWizard(ctx context.Context) error {
+	logger.Info("forge docker create — press Enter to accept defaults")
+	logger.Info("")
+
+	// Step 1: Engine
+	engineName, err := promptEngine()
+	if err != nil {
+		return err
+	}
+	eng, _ := engines.Get(engineName)
+
+	// Step 2: Preset name — validated and checked for collision
+	presetName, err := ui.Text("Preset name", "", func(s string) error {
+		if err := preset.ValidateName(s); err != nil {
+			return err
+		}
+		if preset.Exists(s) {
+			return fmt.Errorf("preset %q already exists — choose another name", s)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
-	cmd.Flags().StringVarP(&engine, "engine", "e", "", "Database engine (postgres, mssql, mysql)")
-	cmd.Flags().StringVar(&image, "image", "", "Override Docker image tag")
-	cmd.Flags().StringVar(&user, "user", "", "Database username (default: config)")
-	cmd.Flags().StringVar(&password, "password", "", "Database password (default: config)")
-	cmd.Flags().StringVar(&db, "db", "", "Database name (default: config)")
-	cmd.Flags().IntVar(&port, "port", 0, "Host port (default: auto-allocate from config range)")
+	// Step 3: Image
+	image, err := promptImage(ctx, engineName)
+	if err != nil {
+		return err
+	}
 
-	return cmd
+	// Step 4: Credentials and database name
+	user, err := promptUser()
+	if err != nil {
+		return err
+	}
+	password, err := promptPassword(eng)
+	if err != nil {
+		return err
+	}
+	db, err := promptDB()
+	if err != nil {
+		return err
+	}
+
+	// Step 5: Confirmation summary
+	logger.Info("")
+	ui.RenderTable([]string{"Setting", "Value"}, [][]string{
+		{"Preset name", presetName},
+		{"Engine", engineName},
+		{"Image", image},
+		{"Username", user},
+		{"Password", "****"},
+		{"Database", db},
+		{"Internal port", strconv.Itoa(eng.DefaultPort())},
+	})
+	logger.Info("")
+
+	ok, err := ui.Confirm("Save this preset?")
+	if err != nil {
+		return err
+	}
+	if !ok {
+		logger.Info("Aborted.")
+		return nil
+	}
+
+	// Steps 6–7: Save preset and pull image
+	p := &preset.Preset{
+		SchemaVersion: 1,
+		Name:          presetName,
+		Engine:        engineName,
+		Image:         image,
+		Database:      db,
+		Username:      user,
+		Password:      password,
+		InternalPort:  eng.DefaultPort(),
+		CreatedAt:     time.Now().UTC(),
+	}
+	if err := service.CreatePreset(ctx, p, true); err != nil {
+		logger.Error(err.Error())
+		return err
+	}
+	logger.Success(fmt.Sprintf("Preset %q saved to ~/.forge/presets/%s.yaml", presetName, presetName))
+	logger.Info("")
+
+	// Step 8: Offer to run immediately
+	runNow, err := ui.ConfirmDefault("Run now?", true)
+	if err != nil {
+		return err
+	}
+	if !runNow {
+		logger.Info(fmt.Sprintf("Run later with: forge docker run %s", presetName))
+		return nil
+	}
+
+	info, err := service.RunPreset(ctx, presetName, service.RunOptions{})
+	if err != nil {
+		logger.Error(err.Error())
+		return err
+	}
+	if info.ConnectionString != "" {
+		logger.Info("  Connection: " + info.ConnectionString)
+	}
+	return nil
 }

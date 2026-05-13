@@ -6,42 +6,46 @@ import (
 
 	"github.com/sametkarademir/forge/internal/core/config"
 	"github.com/sametkarademir/forge/internal/core/ui"
-	dockerclient "github.com/sametkarademir/forge/internal/modules/docker/client"
 	"github.com/sametkarademir/forge/internal/modules/docker/engines"
+	"github.com/sametkarademir/forge/internal/modules/docker/service"
 )
 
 const customImageLabel = "Enter custom..."
 
+// promptEngine shows a selection of available engines rendered as "name (default image)".
+// Returns the engine name (not the display string).
 func promptEngine() (string, error) {
 	all := engines.All()
-	names := make([]string, len(all))
+	displayOpts := make([]string, len(all))
+	nameByDisplay := make(map[string]string, len(all))
 	for i, e := range all {
-		names[i] = e.Name()
+		display := fmt.Sprintf("%s  (%s)", e.Name(), e.DefaultImage())
+		displayOpts[i] = display
+		nameByDisplay[display] = e.Name()
 	}
-	return ui.Select("Database engine", names, names[0])
+	chosen, err := ui.Select("Database engine", displayOpts, displayOpts[0])
+	if err != nil {
+		return "", err
+	}
+	return nameByDisplay[chosen], nil
 }
 
-// promptImage shows a Select with the engine's default + locally-installed images,
-// plus an "Enter custom..." option that falls back to free-text input.
+// promptImage shows a Select with the engine's default + locally-available images,
+// plus an "Enter custom..." fallback. Uses service.ListLocalImages to avoid
+// importing the Docker client directly in the commands layer.
 func promptImage(ctx context.Context, engineName string) (string, error) {
 	eng, ok := engines.Get(engineName)
 	if !ok {
 		return "", engines.ErrUnknownEngine(engineName)
 	}
 
-	// Effective default: config override first, then engine compiled default.
 	defaultImage := config.EngineDefaultImage(engineName)
 	if defaultImage == "" {
 		defaultImage = eng.DefaultImage()
 	}
 
-	// Best-effort: list images from local daemon. Degrade gracefully on failure.
-	var installed []dockerclient.ImageRef
-	if dc, err := dockerclient.NewClient(); err == nil {
-		installed, _ = dc.ListImages(ctx, eng.ImageRepos())
-	}
+	installed, _ := service.ListLocalImages(ctx, eng)
 
-	// Build display options and a parallel slice of actual values.
 	displayOpts := []string{defaultImage + "  (default)"}
 	values := []string{defaultImage}
 
