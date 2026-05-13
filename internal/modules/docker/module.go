@@ -22,6 +22,7 @@ func (m *dockerModule) Command() *cobra.Command {
 
 	root.AddCommand(commands.NewCreateCommand())
 	root.AddCommand(commands.NewRunCommand())
+	root.AddCommand(commands.NewStopCommand())
 	root.AddCommand(commands.NewShowCommand())
 	root.AddCommand(commands.NewListCommand())
 	root.AddCommand(commands.NewConnCommand())

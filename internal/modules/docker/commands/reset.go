@@ -1,7 +1,9 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
+	"os/exec"
 
 	"github.com/sametkarademir/forge/internal/core/logger"
 	"github.com/sametkarademir/forge/internal/core/ui"
@@ -13,21 +15,32 @@ func NewResetCommand() *cobra.Command {
 	var yes bool
 
 	cmd := &cobra.Command{
-		Use:   "reset <project>",
-		Short: "Wipe and recreate the database for a project (same port and credentials)",
+		Use:   "reset <preset>",
+		Short: "Wipe and recreate the database for a preset (same port and credentials)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			project := args[0]
+			name := args[0]
 
 			if !yes {
-				ok, err := ui.Confirm(fmt.Sprintf("This will DELETE all data for project %q. Continue?", project))
+				ok, err := ui.Confirm(fmt.Sprintf("This will DELETE all data for preset %q. Continue?", name))
 				if err != nil || !ok {
-					fmt.Println("Aborted.")
+					logger.Info("Aborted.")
 					return nil
 				}
 			}
 
-			if err := service.ResetProject(cmd.Context(), project); err != nil {
+			if err := service.ResetPreset(cmd.Context(), name); err != nil {
+				var portErr *service.PortConflictError
+				if errors.As(err, &portErr) {
+					logger.Error(fmt.Sprintf("port %d is in use by another process:", portErr.Port))
+					out, _ := exec.Command("lsof", "-i", fmt.Sprintf(":%d", portErr.Port)).Output()
+					if len(out) > 0 {
+						logger.Plain(string(out))
+					}
+					logger.Info(fmt.Sprintf("  Option A: stop the process on port %d, then re-run reset.", portErr.Port))
+					logger.Info(fmt.Sprintf("  Option B: remove the preset and recreate it with a different port: forge docker remove %s --purge && forge docker create", name))
+					return err
+				}
 				logger.Error(err.Error())
 				return err
 			}
