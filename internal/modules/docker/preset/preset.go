@@ -13,5 +13,6 @@ type Preset struct {
 	Username      string    `yaml:"username"`
 	Password      string    `yaml:"password"`
 	InternalPort  int       `yaml:"internal_port"`
+	HostPort      int       `yaml:"host_port,omitempty"`
 	CreatedAt     time.Time `yaml:"created_at"`
 }

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/sametkarademir/forge/internal/core/config"
 	"github.com/sametkarademir/forge/internal/core/logger"
 	"github.com/sametkarademir/forge/internal/core/ui"
 	"github.com/sametkarademir/forge/internal/modules/docker/engines"
@@ -79,7 +80,17 @@ func runCreateWizard(ctx context.Context) error {
 		return err
 	}
 
-	// Step 5: Confirmation summary
+	// Step 5: Host port (optional)
+	hostPort, err := promptHostPort(config.PortRangeStart(), config.PortRangeEnd())
+	if err != nil {
+		return err
+	}
+
+	// Step 6: Confirmation summary
+	hostPortDisplay := fmt.Sprintf("auto (%d–%d)", config.PortRangeStart(), config.PortRangeEnd())
+	if hostPort != 0 {
+		hostPortDisplay = strconv.Itoa(hostPort)
+	}
 	logger.Info("")
 	ui.RenderTable([]string{"Setting", "Value"}, [][]string{
 		{"Preset name", presetName},
@@ -88,7 +99,7 @@ func runCreateWizard(ctx context.Context) error {
 		{"Username", user},
 		{"Password", "****"},
 		{"Database", db},
-		{"Internal port", strconv.Itoa(eng.DefaultPort())},
+		{"Host port", hostPortDisplay},
 	})
 	logger.Info("")
 
@@ -101,7 +112,7 @@ func runCreateWizard(ctx context.Context) error {
 		return nil
 	}
 
-	// Steps 6–7: Save preset and pull image
+	// Steps 7–8: Save preset and pull image
 	p := &preset.Preset{
 		SchemaVersion: 1,
 		Name:          presetName,
@@ -111,6 +122,7 @@ func runCreateWizard(ctx context.Context) error {
 		Username:      user,
 		Password:      password,
 		InternalPort:  eng.DefaultPort(),
+		HostPort:      hostPort,
 		CreatedAt:     time.Now().UTC(),
 	}
 	if err := service.CreatePreset(ctx, p, true); err != nil {
@@ -120,7 +132,7 @@ func runCreateWizard(ctx context.Context) error {
 	logger.Success(fmt.Sprintf("Preset %q saved to ~/.forge/presets/%s.yaml", presetName, presetName))
 	logger.Info("")
 
-	// Step 8: Offer to run immediately
+	// Step 9: Offer to run immediately
 	runNow, err := ui.ConfirmDefault("Run now?", true)
 	if err != nil {
 		return err

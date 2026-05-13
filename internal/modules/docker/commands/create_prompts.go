@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/sametkarademir/forge/internal/core/config"
 	"github.com/sametkarademir/forge/internal/core/ui"
@@ -101,4 +102,30 @@ func promptDB() (string, error) {
 		}
 		return nil
 	})
+}
+
+// promptHostPort asks for an optional host-side port.
+// Returns 0 when the user leaves the field empty (auto-allocate at run time).
+func promptHostPort(rangeStart, rangeEnd int) (int, error) {
+	raw, err := ui.Text(
+		fmt.Sprintf("Host port  (leave empty to auto-assign from %d–%d)", rangeStart, rangeEnd),
+		"",
+		func(s string) error {
+			if s == "" {
+				return nil
+			}
+			n, parseErr := strconv.Atoi(s)
+			if parseErr != nil || n < 1 || n > 65535 {
+				return fmt.Errorf("must be a number between 1 and 65535, or leave empty for auto")
+			}
+			return nil
+		},
+	)
+	if err != nil {
+		return 0, err
+	}
+	if raw == "" {
+		return 0, nil
+	}
+	return strconv.Atoi(raw)
 }

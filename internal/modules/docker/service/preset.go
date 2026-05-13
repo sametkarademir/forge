@@ -148,6 +148,9 @@ func RunPreset(ctx context.Context, name string, opts RunOptions) (*ContainerInf
 
 	port := opts.HostPort
 	if port == 0 {
+		port = p.HostPort // preset's preferred port (0 = auto)
+	}
+	if port == 0 {
 		port, err = NextFreePort(config.PortRangeStart(), config.PortRangeEnd())
 		if err != nil {
 			return nil, fmt.Errorf(
