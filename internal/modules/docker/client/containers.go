@@ -104,6 +104,9 @@ func (dc *DockerClient) RunContainer(ctx context.Context, cfg RunConfig) (string
 		Labels:       cfg.Labels,
 		ExposedPorts: exposedPorts,
 	}
+	if len(cfg.Cmd) > 0 {
+		containerConfig.Cmd = cfg.Cmd
+	}
 	hostConfig := &container.HostConfig{
 		PortBindings: portBindings,
 		Mounts:       mounts,

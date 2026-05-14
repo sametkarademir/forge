@@ -34,6 +34,8 @@ func (m *mssql) ConnectionInfo(a ConnArgs) ConnInfo {
 	return ConnInfo{Primary: raw, MaskedPrimary: masked}
 }
 
+func (m *mssql) Cmd(_ string) []string { return nil }
+
 // ValidatePassword enforces SQL Server 2019+ SA_PASSWORD complexity rules.
 func (m *mssql) ValidatePassword(password string) error {
 	var failures []string

@@ -42,6 +42,10 @@ type Engine interface {
 	DefaultPort() int
 	DataDir(image string) string // volume mount target inside the container
 	EnvVars(user, password, db string) map[string]string
+	// Cmd returns the container command override. Most engines return nil (use the image's
+	// default ENTRYPOINT/CMD). Engines that configure auth or runtime options via CLI flags
+	// (e.g. Redis --requirepass) return the full argv here.
+	Cmd(password string) []string
 	ConnectionInfo(args ConnArgs) ConnInfo
 	ValidatePassword(password string) error
 	PasswordEnvKey() string // env var key that holds the password in a running container

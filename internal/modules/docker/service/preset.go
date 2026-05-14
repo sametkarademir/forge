@@ -189,6 +189,7 @@ func RunPreset(ctx context.Context, name string, opts RunOptions) (*ContainerInf
 		Name:          containerName,
 		Image:         imgTag,
 		EnvVars:       eng.EnvVars(p.Username, p.Password, p.Database),
+		Cmd:           eng.Cmd(p.Password),
 		HostPort:      port,
 		ContainerPort: eng.DefaultPort(),
 		VolumeTarget:  eng.DataDir(imgTag),

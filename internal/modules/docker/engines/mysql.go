@@ -31,4 +31,5 @@ func (m *mysql) ConnectionInfo(a ConnArgs) ConnInfo {
 	return ConnInfo{Primary: raw, MaskedPrimary: masked}
 }
 
+func (m *mysql) Cmd(_ string) []string                  { return nil }
 func (m *mysql) ValidatePassword(password string) error { return nil }
