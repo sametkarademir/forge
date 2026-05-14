@@ -75,9 +75,12 @@ func runCreateWizard(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	db, err := promptDB()
-	if err != nil {
-		return err
+	db := "0"
+	if engineName != "redis" {
+		db, err = promptDB()
+		if err != nil {
+			return err
+		}
 	}
 
 	// Step 5: Host port (optional)

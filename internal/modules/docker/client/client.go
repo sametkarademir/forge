@@ -19,6 +19,7 @@ type RunConfig struct {
 	Name          string
 	Image         string
 	EnvVars       map[string]string
+	Cmd           []string // optional command override; nil uses the image's default ENTRYPOINT/CMD
 	HostPort      int
 	ContainerPort int
 	VolumeTarget  string // mount path inside container

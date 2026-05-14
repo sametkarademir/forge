@@ -42,6 +42,7 @@ func (p *postgres) ConnectionInfo(a ConnArgs) ConnInfo {
 	return ConnInfo{Primary: raw, MaskedPrimary: masked}
 }
 
+func (p *postgres) Cmd(_ string) []string                  { return nil }
 func (p *postgres) ValidatePassword(password string) error { return nil }
 
 // pgMajorVersion parses the major version number from an image tag such as
