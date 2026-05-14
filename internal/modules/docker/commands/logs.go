@@ -24,7 +24,7 @@ func NewLogsCommand() *cobra.Command {
 				logger.Error(err.Error())
 				return err
 			}
-			defer rc.Close()
+			defer func() { _ = rc.Close() }()
 			// ContainerLogs returns a multiplexed stream; StdCopy demultiplexes it.
 			if _, err := stdcopy.StdCopy(os.Stdout, os.Stderr, rc); err != nil && err != io.EOF {
 				return err
