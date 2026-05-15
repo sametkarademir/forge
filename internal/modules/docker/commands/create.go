@@ -75,8 +75,16 @@ func runCreateWizard(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	db := "0"
-	if engineName != "redis" {
+	var db string
+	switch engineName {
+	case "redis":
+		db = "0"
+	case "rabbitmq":
+		db, err = promptVhost()
+		if err != nil {
+			return err
+		}
+	default:
 		db, err = promptDB()
 		if err != nil {
 			return err
@@ -89,21 +97,49 @@ func runCreateWizard(ctx context.Context) error {
 		return err
 	}
 
+	// Step 5b: Engine-specific extra options (e.g. RabbitMQ Management UI port)
+	var options map[string]string
+	if wp, ok := eng.(engines.WizardPromptProvider); ok {
+		for _, op := range wp.WizardPrompts(image) {
+			validate := op.Validate
+			val, err := ui.Text(op.Label, op.Default, validate)
+			if err != nil {
+				return err
+			}
+			if val != "" {
+				if options == nil {
+					options = make(map[string]string)
+				}
+				options[op.Key] = val
+			}
+		}
+	}
+
 	// Step 6: Confirmation summary
 	hostPortDisplay := fmt.Sprintf("auto (%d–%d)", config.PortRangeStart(), config.PortRangeEnd())
 	if hostPort != 0 {
 		hostPortDisplay = strconv.Itoa(hostPort)
 	}
-	logger.Info("")
-	ui.RenderTable([]string{"Setting", "Value"}, [][]string{
+	dbLabel := "Database"
+	if engineName == "rabbitmq" {
+		dbLabel = "Virtual host"
+	}
+	summaryRows := [][]string{
 		{"Preset name", presetName},
 		{"Engine", engineName},
 		{"Image", image},
 		{"Username", user},
 		{"Password", "****"},
-		{"Database", db},
+		{dbLabel, db},
 		{"Host port", hostPortDisplay},
-	})
+	}
+	for k, v := range options {
+		if v != "" {
+			summaryRows = append(summaryRows, []string{k, v})
+		}
+	}
+	logger.Info("")
+	ui.RenderTable([]string{"Setting", "Value"}, summaryRows)
 	logger.Info("")
 
 	ok, err := ui.Confirm("Save this preset?")
@@ -126,6 +162,7 @@ func runCreateWizard(ctx context.Context) error {
 		Password:      password,
 		InternalPort:  eng.DefaultPort(),
 		HostPort:      hostPort,
+		Options:       options,
 		CreatedAt:     time.Now().UTC(),
 	}
 	if err := service.CreatePreset(ctx, p, true); err != nil {

@@ -82,6 +82,16 @@ func promptImage(ctx context.Context, engineName string) (string, error) {
 	return defaultImage, nil
 }
 
+// promptVhost asks for a RabbitMQ virtual host. Defaults to "/" (the RabbitMQ default).
+func promptVhost() (string, error) {
+	return ui.Text("Virtual host", "/", func(s string) error {
+		if s == "" {
+			return fmt.Errorf("virtual host cannot be empty")
+		}
+		return nil
+	})
+}
+
 func promptUser() (string, error) {
 	return ui.Text("DB username", config.DefaultUser(), func(s string) error {
 		if s == "" {
