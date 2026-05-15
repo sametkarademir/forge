@@ -8,13 +8,33 @@ import (
 
 // ConnArgs is the runtime context an engine needs to produce its connection info.
 // Options may be nil for engines that do not require extra configuration.
+// ExtraPorts holds host ports allocated for additional container ports (OptionKey → host port);
+// populated only for engines that implement ExtraPortProvider.
 type ConnArgs struct {
-	Host     string
-	HostPort int
-	User     string
-	Password string
-	Database string
-	Options  map[string]string // engine-specific extras from Preset.Options; may be nil
+	Host       string
+	HostPort   int
+	User       string
+	Password   string
+	Database   string
+	Options    map[string]string // engine-specific extras from Preset.Options; may be nil
+	ExtraPorts map[string]int    // OptionKey → assigned host port; nil for single-port engines
+}
+
+// ExtraPort declares an additional container port an engine exposes beyond its primary port.
+// OptionKey is the key under Preset.Options where the user's preferred host port is stored.
+type ExtraPort struct {
+	Label         string // human label, e.g. "Management UI"
+	ContainerPort int    // fixed port inside the container (e.g. 15672)
+	OptionKey     string // e.g. "mgmt_host_port"; used as label suffix and Options key
+}
+
+// OptionPrompt describes one engine-specific question the create wizard should ask.
+// The answer is stored under Key in Preset.Options.
+type OptionPrompt struct {
+	Key      string
+	Label    string
+	Default  string
+	Validate func(string) error // may be nil
 }
 
 // Endpoint is one named additional connection endpoint.
@@ -86,4 +106,21 @@ func All() []Engine {
 // ErrUnknownEngine returns a user-friendly error for an unregistered engine name.
 func ErrUnknownEngine(name string) error {
 	return fmt.Errorf("unknown engine %q — run 'forge docker engines' to see supported engines", name)
+}
+
+// ExtraPortProvider is implemented by engines that expose more than one host port.
+// Engines opt in by implementing this interface; single-port engines do not need it.
+// image is the resolved Docker image tag (used to gate ports on image variants, e.g. -management).
+// opts is Preset.Options, providing user-configured preferred host ports.
+type ExtraPortProvider interface {
+	Engine
+	ExtraPorts(image string, opts map[string]string) []ExtraPort
+}
+
+// WizardPromptProvider is implemented by engines that require engine-specific questions
+// beyond the standard wizard prompts (user, password, database, host port).
+// image is the resolved Docker image tag, available for conditional prompts.
+type WizardPromptProvider interface {
+	Engine
+	WizardPrompts(image string) []OptionPrompt
 }

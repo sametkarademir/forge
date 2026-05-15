@@ -94,12 +94,13 @@ func ShowPreset(ctx context.Context, name string) (*PresetView, error) {
 		view.Status = "running"
 		if eng, ok := engines.Get(p.Engine); ok {
 			ci := eng.ConnectionInfo(engines.ConnArgs{
-				Host:     "localhost",
-				HostPort: port,
-				User:     p.Username,
-				Password: p.Password,
-				Database: p.Database,
-				Options:  p.Options,
+				Host:       "localhost",
+				HostPort:   port,
+				User:       p.Username,
+				Password:   p.Password,
+				Database:   p.Database,
+				Options:    p.Options,
+				ExtraPorts: extraPortsFromLabels(eng, c.Config.Image, p.Options, c.Config.Labels),
 			})
 			view.Primary = ci.MaskedPrimary
 			view.Endpoints = ci.Endpoints
@@ -247,14 +248,61 @@ func ConnString(ctx context.Context, name string) (string, error) {
 		return "", engines.ErrUnknownEngine(p.Engine)
 	}
 	ci := eng.ConnectionInfo(engines.ConnArgs{
-		Host:     "localhost",
-		HostPort: port,
-		User:     p.Username,
-		Password: p.Password,
-		Database: p.Database,
-		Options:  p.Options,
+		Host:       "localhost",
+		HostPort:   port,
+		User:       p.Username,
+		Password:   p.Password,
+		Database:   p.Database,
+		Options:    p.Options,
+		ExtraPorts: extraPortsFromLabels(eng, c.Config.Image, p.Options, c.Config.Labels),
 	})
 	return ci.Primary, nil
+}
+
+// ConnView holds both the unmasked and masked primary DSN plus any additional endpoints.
+type ConnView struct {
+	Primary       string
+	MaskedPrimary string
+	Endpoints     []engines.Endpoint
+}
+
+// ConnView returns full connection info for a running preset container.
+// Returns an error if the container is not running.
+func GetConnView(ctx context.Context, name string) (*ConnView, error) {
+	p, err := preset.Load(name)
+	if err != nil {
+		return nil, err
+	}
+	dc, err := dockerclient.NewClient()
+	if err != nil {
+		return nil, err
+	}
+	c, err := dc.InspectByPreset(ctx, name)
+	if err != nil {
+		return nil, fmt.Errorf("preset %q has no container — start with: forge docker run %s", name, name)
+	}
+	if !c.State.Running {
+		return nil, fmt.Errorf("preset %q is not running — start with: forge docker run %s", name, name)
+	}
+	port, _ := strconv.Atoi(c.Config.Labels["forge.host_port"])
+	eng, ok := engines.Get(p.Engine)
+	if !ok {
+		return nil, engines.ErrUnknownEngine(p.Engine)
+	}
+	ci := eng.ConnectionInfo(engines.ConnArgs{
+		Host:       "localhost",
+		HostPort:   port,
+		User:       p.Username,
+		Password:   p.Password,
+		Database:   p.Database,
+		Options:    p.Options,
+		ExtraPorts: extraPortsFromLabels(eng, c.Config.Image, p.Options, c.Config.Labels),
+	})
+	return &ConnView{
+		Primary:       ci.Primary,
+		MaskedPrimary: ci.MaskedPrimary,
+		Endpoints:     ci.Endpoints,
+	}, nil
 }
 
 // extractLegacyName derives a human-readable name from a legacy container.

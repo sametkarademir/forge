@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strconv"
 	"time"
 
@@ -15,9 +16,10 @@ import (
 
 // RunOptions controls RunPreset behavior.
 type RunOptions struct {
-	NoWait   bool
-	Timeout  int // seconds; 0 = config default
-	HostPort int // 0 = auto-allocate; non-zero forces a specific port (used by ResetPreset)
+	NoWait     bool
+	Timeout    int            // seconds; 0 = config default
+	HostPort   int            // 0 = auto-allocate; non-zero forces a specific port (used by ResetPreset)
+	ExtraPorts map[string]int // preferred host ports for extra bindings (OptionKey → port); 0 = auto
 }
 
 // ContainerInfo is a snapshot of a preset container's runtime state.
@@ -184,7 +186,25 @@ func RunPreset(ctx context.Context, name string, opts RunOptions) (*ContainerInf
 		imgTag = eng.DefaultImage()
 	}
 
+	// Allocate extra host ports for engines that expose multiple ports.
+	extraBindings, extraAllocated, extraLabels, err := allocateExtraPorts(eng, imgTag, p.Options, opts.ExtraPorts)
+	if err != nil {
+		return nil, err
+	}
+
 	containerName := PresetContainerName(name)
+	labels := map[string]string{
+		"forge.managed":        "true",
+		"forge.preset":         name,
+		"forge.engine":         p.Engine,
+		"forge.created_at":     now.Format(time.RFC3339),
+		"forge.host_port":      strconv.Itoa(port),
+		"forge.schema_version": "2",
+		"forge.user":           p.Username,
+		"forge.db":             p.Database,
+	}
+	maps.Copy(labels, extraLabels)
+
 	if _, err := dc.RunContainer(ctx, dockerclient.RunConfig{
 		Name:          containerName,
 		Image:         imgTag,
@@ -192,19 +212,11 @@ func RunPreset(ctx context.Context, name string, opts RunOptions) (*ContainerInf
 		Cmd:           eng.Cmd(p.Password),
 		HostPort:      port,
 		ContainerPort: eng.DefaultPort(),
+		ExtraPorts:    extraBindings,
 		VolumeTarget:  eng.DataDir(imgTag),
 		VolumeName:    volName,
-		Labels: map[string]string{
-			"forge.managed":        "true",
-			"forge.preset":         name,
-			"forge.engine":         p.Engine,
-			"forge.created_at":     now.Format(time.RFC3339),
-			"forge.host_port":      strconv.Itoa(port),
-			"forge.schema_version": "1",
-			"forge.user":           p.Username,
-			"forge.db":             p.Database,
-		},
-		NetworkName: NetworkName(),
+		Labels:        labels,
+		NetworkName:   NetworkName(),
 	}); err != nil {
 		return nil, err
 	}
@@ -215,12 +227,13 @@ func RunPreset(ctx context.Context, name string, opts RunOptions) (*ContainerInf
 	}
 
 	ci := eng.ConnectionInfo(engines.ConnArgs{
-		Host:     "localhost",
-		HostPort: port,
-		User:     p.Username,
-		Password: p.Password,
-		Database: p.Database,
-		Options:  p.Options,
+		Host:       "localhost",
+		HostPort:   port,
+		User:       p.Username,
+		Password:   p.Password,
+		Database:   p.Database,
+		Options:    p.Options,
+		ExtraPorts: extraAllocated,
 	})
 	return &ContainerInfo{
 		PresetName:       name,
@@ -234,6 +247,64 @@ func RunPreset(ctx context.Context, name string, opts RunOptions) (*ContainerInf
 		ConnectionString: ci.Primary,
 		Endpoints:        ci.Endpoints,
 	}, nil
+}
+
+// allocateExtraPorts resolves host ports for engines implementing ExtraPortProvider.
+// preferred contains user-specified host ports (from RunOptions.ExtraPorts); 0 means auto-assign.
+// Returns the RunConfig bindings, the allocated map (OptionKey→host), and per-key labels.
+func allocateExtraPorts(
+	eng engines.Engine,
+	image string,
+	opts map[string]string,
+	preferred map[string]int,
+) ([]dockerclient.ExtraPortBinding, map[string]int, map[string]string, error) {
+	epp, ok := eng.(engines.ExtraPortProvider)
+	if !ok {
+		return nil, nil, nil, nil
+	}
+	extras := epp.ExtraPorts(image, opts)
+	if len(extras) == 0 {
+		return nil, nil, nil, nil
+	}
+
+	bindings := make([]dockerclient.ExtraPortBinding, 0, len(extras))
+	allocated := make(map[string]int, len(extras))
+	labels := make(map[string]string, len(extras))
+
+	for _, ep := range extras {
+		want := preferred[ep.OptionKey]
+		if want == 0 {
+			// Parse from Preset.Options when not in RunOptions (first-time run).
+			if s, ok := opts[ep.OptionKey]; ok {
+				want, _ = strconv.Atoi(s)
+			}
+		}
+
+		var hostPort int
+		var err error
+		if want == 0 {
+			hostPort, err = NextFreePort(config.PortRangeStart(), config.PortRangeEnd())
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf(
+					"port range %d–%d exhausted allocating extra port %q",
+					config.PortRangeStart(), config.PortRangeEnd(), ep.OptionKey,
+				)
+			}
+		} else {
+			if !IsPortFree(want) {
+				return nil, nil, nil, &PortConflictError{Port: want}
+			}
+			hostPort = want
+		}
+
+		bindings = append(bindings, dockerclient.ExtraPortBinding{
+			HostPort:      hostPort,
+			ContainerPort: ep.ContainerPort,
+		})
+		allocated[ep.OptionKey] = hostPort
+		labels["forge.extra_port."+ep.OptionKey] = strconv.Itoa(hostPort)
+	}
+	return bindings, allocated, labels, nil
 }
 
 // StopPreset stops the container for a preset. Idempotent.
@@ -272,6 +343,15 @@ func ResetPreset(ctx context.Context, name string) error {
 
 	port, _ := strconv.Atoi(c.Config.Labels["forge.host_port"])
 
+	// Preserve extra port assignments so a reset doesn't change the management UI URL etc.
+	extraPorts := make(map[string]int)
+	for k, v := range c.Config.Labels {
+		if len(k) > len("forge.extra_port.") && k[:len("forge.extra_port.")] == "forge.extra_port." {
+			key := k[len("forge.extra_port."):]
+			extraPorts[key], _ = strconv.Atoi(v)
+		}
+	}
+
 	_ = dc.StopContainer(ctx, c.ID)
 	if err := dc.RemoveContainer(ctx, c.ID); err != nil {
 		return fmt.Errorf("remove container: %w", err)
@@ -283,7 +363,12 @@ func ResetPreset(ctx context.Context, name string) error {
 	if port != 0 && !IsPortFree(port) {
 		return &PortConflictError{Port: port}
 	}
+	for key, p := range extraPorts {
+		if p != 0 && !IsPortFree(p) {
+			return fmt.Errorf("extra port %d (for %q) is occupied by another process", p, key)
+		}
+	}
 
-	_, err = RunPreset(ctx, name, RunOptions{HostPort: port})
+	_, err = RunPreset(ctx, name, RunOptions{HostPort: port, ExtraPorts: extraPorts})
 	return err
 }
