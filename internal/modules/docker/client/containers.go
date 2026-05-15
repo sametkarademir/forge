@@ -91,6 +91,11 @@ func (dc *DockerClient) RunContainer(ctx context.Context, cfg RunConfig) (string
 		},
 	}
 	exposedPorts := nat.PortSet{containerPort: struct{}{}}
+	for _, ep := range cfg.ExtraPorts {
+		p := nat.Port(fmt.Sprintf("%d/tcp", ep.ContainerPort))
+		portBindings[p] = []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", ep.HostPort)}}
+		exposedPorts[p] = struct{}{}
+	}
 
 	mounts := []mount.Mount{{
 		Type:   mount.TypeVolume,

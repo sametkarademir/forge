@@ -30,12 +30,13 @@ func buildContainerInfo(c *dockertypes.ContainerJSON, p *preset.Preset) *Contain
 	if p != nil {
 		if eng, ok := engines.Get(engineName); ok {
 			ci := eng.ConnectionInfo(engines.ConnArgs{
-				Host:     "localhost",
-				HostPort: port,
-				User:     p.Username,
-				Password: p.Password,
-				Database: p.Database,
-				Options:  p.Options,
+				Host:       "localhost",
+				HostPort:   port,
+				User:       p.Username,
+				Password:   p.Password,
+				Database:   p.Database,
+				Options:    p.Options,
+				ExtraPorts: extraPortsFromLabels(eng, c.Config.Image, p.Options, labels),
 			})
 			connStr = ci.Primary
 			endpoints = ci.Endpoints
@@ -55,6 +56,27 @@ func buildContainerInfo(c *dockertypes.ContainerJSON, p *preset.Preset) *Contain
 		ConnectionString: connStr,
 		Endpoints:        endpoints,
 	}
+}
+
+// extraPortsFromLabels reads forge.extra_port.* labels into a map[OptionKey]hostPort
+// for engines that implement ExtraPortProvider. Labels are the authoritative source
+// because runtime port allocation may differ from the value stored in Preset.Options.
+func extraPortsFromLabels(eng engines.Engine, image string, opts map[string]string, labels map[string]string) map[string]int {
+	epp, ok := eng.(engines.ExtraPortProvider)
+	if !ok {
+		return nil
+	}
+	extras := epp.ExtraPorts(image, opts)
+	if len(extras) == 0 {
+		return nil
+	}
+	result := make(map[string]int, len(extras))
+	for _, ep := range extras {
+		if v, ok := labels["forge.extra_port."+ep.OptionKey]; ok {
+			result[ep.OptionKey], _ = strconv.Atoi(v)
+		}
+	}
+	return result
 }
 
 func readinessTimeout(override int) int {

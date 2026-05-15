@@ -14,6 +14,12 @@ type DockerClient struct {
 	cli *dockerclient.Client
 }
 
+// ExtraPortBinding maps one additional host port to a container port.
+type ExtraPortBinding struct {
+	HostPort      int
+	ContainerPort int
+}
+
 // RunConfig holds parameters for creating and starting a container.
 type RunConfig struct {
 	Name          string
@@ -22,7 +28,8 @@ type RunConfig struct {
 	Cmd           []string // optional command override; nil uses the image's default ENTRYPOINT/CMD
 	HostPort      int
 	ContainerPort int
-	VolumeTarget  string // mount path inside container
+	ExtraPorts    []ExtraPortBinding // additional host→container port bindings beyond the primary
+	VolumeTarget  string             // mount path inside container
 	VolumeName    string
 	Labels        map[string]string
 	NetworkName   string
