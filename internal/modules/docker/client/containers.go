@@ -151,14 +151,27 @@ func (dc *DockerClient) RemoveContainer(ctx context.Context, id string) error {
 	return dc.cli.ContainerRemove(ctx, id, container.RemoveOptions{Force: true})
 }
 
+// LogsOptions controls ContainerLogs behaviour.
+type LogsOptions struct {
+	Follow bool
+	Tail   string // number of lines or "all"; empty means all
+	Since  string // duration string e.g. "5m", "1h", or RFC3339 timestamp
+}
+
 // ContainerLogs returns a stream of the container's stdout and stderr.
 // The stream is Docker's multiplexed format; callers should use
 // stdcopy.StdCopy(stdout, stderr, rc) to demultiplex correctly.
-func (dc *DockerClient) ContainerLogs(ctx context.Context, id string, follow bool) (io.ReadCloser, error) {
+func (dc *DockerClient) ContainerLogs(ctx context.Context, id string, opts LogsOptions) (io.ReadCloser, error) {
+	tail := opts.Tail
+	if tail == "" {
+		tail = "all"
+	}
 	return dc.cli.ContainerLogs(ctx, id, container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
-		Follow:     follow,
+		Follow:     opts.Follow,
 		Timestamps: false,
+		Tail:       tail,
+		Since:      opts.Since,
 	})
 }

@@ -211,7 +211,7 @@ func ListAll(ctx context.Context) ([]Row, error) {
 
 // LogsPreset returns a multiplexed stdout+stderr stream for the preset container.
 // Callers should use stdcopy.StdCopy to demultiplex.
-func LogsPreset(ctx context.Context, name string, follow bool) (io.ReadCloser, error) {
+func LogsPreset(ctx context.Context, name string, opts dockerclient.LogsOptions) (io.ReadCloser, error) {
 	dc, err := dockerclient.NewClient()
 	if err != nil {
 		return nil, err
@@ -220,7 +220,7 @@ func LogsPreset(ctx context.Context, name string, follow bool) (io.ReadCloser, e
 	if err != nil {
 		return nil, fmt.Errorf("no container found for preset %q", name)
 	}
-	return dc.ContainerLogs(ctx, c.ID, follow)
+	return dc.ContainerLogs(ctx, c.ID, opts)
 }
 
 // ConnString returns the unmasked DSN for a running preset container.
