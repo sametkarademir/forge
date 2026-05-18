@@ -315,7 +315,10 @@ func StopPreset(ctx context.Context, name string) error {
 	}
 	c, err := dc.InspectByPreset(ctx, name)
 	if err != nil {
-		return nil // not found — idempotent success
+		if !preset.Exists(name) {
+			logger.Warn(fmt.Sprintf("no preset named %q — nothing to stop", name))
+		}
+		return nil // idempotent success
 	}
 	if err := dc.StopContainer(ctx, c.ID); err != nil {
 		return fmt.Errorf("stop container: %w", err)

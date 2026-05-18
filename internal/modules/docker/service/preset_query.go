@@ -10,6 +10,7 @@ import (
 	"time"
 
 	dockertypes "github.com/docker/docker/api/types"
+	"github.com/sametkarademir/forge/internal/core/logger"
 	dockerclient "github.com/sametkarademir/forge/internal/modules/docker/client"
 	"github.com/sametkarademir/forge/internal/modules/docker/engines"
 	"github.com/sametkarademir/forge/internal/modules/docker/preset"
@@ -42,6 +43,7 @@ func RemovePreset(ctx context.Context, name string, mode RemoveMode) error {
 			_ = dc.VolumeRemove(ctx, "forge-"+name+"-"+engineName+"-data")
 		}
 		if !presetExists {
+			logger.Warn(fmt.Sprintf("no preset named %q — nothing to remove", name))
 			return nil
 		}
 		if mode == RemoveAll {
