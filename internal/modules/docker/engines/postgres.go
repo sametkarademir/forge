@@ -45,6 +45,10 @@ func (p *postgres) ConnectionInfo(a ConnArgs) ConnInfo {
 func (p *postgres) Cmd(_ string) []string                  { return nil }
 func (p *postgres) ValidatePassword(password string) error { return nil }
 
+func (p *postgres) ShellCmd(user, _, db string) []string {
+	return []string{"psql", "-U", user, "-d", db}
+}
+
 // pgMajorVersion parses the major version number from an image tag such as
 // "postgres:18-alpine", "postgres:17.2", or "postgis/postgis:18-3.5-alpine".
 // Returns 0 if the version cannot be determined (e.g. "latest").

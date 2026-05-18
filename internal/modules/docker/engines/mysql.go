@@ -33,3 +33,7 @@ func (m *mysql) ConnectionInfo(a ConnArgs) ConnInfo {
 
 func (m *mysql) Cmd(_ string) []string                  { return nil }
 func (m *mysql) ValidatePassword(password string) error { return nil }
+
+func (m *mysql) ShellCmd(user, password, db string) []string {
+	return []string{"mysql", "-u", user, "-p" + password, db}
+}

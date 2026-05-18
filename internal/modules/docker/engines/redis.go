@@ -68,3 +68,7 @@ func (r *redis) ValidatePassword(password string) error {
 	}
 	return nil
 }
+
+func (r *redis) ShellCmd(_, password, _ string) []string {
+	return []string{"redis-cli", "-a", password}
+}

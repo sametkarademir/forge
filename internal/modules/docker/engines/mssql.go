@@ -36,6 +36,10 @@ func (m *mssql) ConnectionInfo(a ConnArgs) ConnInfo {
 
 func (m *mssql) Cmd(_ string) []string { return nil }
 
+func (m *mssql) ShellCmd(_, password, _ string) []string {
+	return []string{"/opt/mssql-tools/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", password}
+}
+
 // ValidatePassword enforces SQL Server 2019+ SA_PASSWORD complexity rules.
 func (m *mssql) ValidatePassword(password string) error {
 	var failures []string
