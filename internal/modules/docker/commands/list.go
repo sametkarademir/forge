@@ -3,11 +3,35 @@ package commands
 import (
 	"strconv"
 
+	"github.com/fatih/color"
 	"github.com/sametkarademir/forge/internal/core/logger"
 	"github.com/sametkarademir/forge/internal/core/ui"
 	"github.com/sametkarademir/forge/internal/modules/docker/service"
 	"github.com/spf13/cobra"
 )
+
+var (
+	statusGreen   = color.New(color.FgGreen).SprintFunc()
+	statusYellow  = color.New(color.FgYellow).SprintFunc()
+	statusRed     = color.New(color.FgRed).SprintFunc()
+	statusMagenta = color.New(color.FgMagenta).SprintFunc()
+	statusDim     = color.New(color.Faint).SprintFunc()
+)
+
+func colorStatus(s string) string {
+	switch s {
+	case "running":
+		return statusGreen(s)
+	case "stopped", "exited":
+		return statusYellow(s)
+	case "orphaned":
+		return statusRed(s)
+	case "legacy":
+		return statusMagenta(s)
+	default:
+		return statusDim(s)
+	}
+}
 
 // NewListCommand returns the command that lists all presets and their container status.
 func NewListCommand() *cobra.Command {
@@ -42,7 +66,7 @@ func NewListCommand() *cobra.Command {
 					r.Engine,
 					r.Image,
 					port,
-					r.Status,
+					colorStatus(r.Status),
 					created,
 				})
 			}
