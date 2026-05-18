@@ -30,6 +30,7 @@ func (m *dockerModule) Command() *cobra.Command {
 	root.AddCommand(commands.NewResetCommand())
 	root.AddCommand(commands.NewRemoveCommand())
 	root.AddCommand(commands.NewPruneCommand())
+	root.AddCommand(commands.NewDoctorCommand())
 	root.AddCommand(commands.NewEnginesCommand())
 
 	return root
