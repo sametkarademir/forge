@@ -1,8 +1,14 @@
 package commands
 
 import (
+	"fmt"
+	"sort"
+	"strings"
+
 	"github.com/sametkarademir/forge/internal/core/logger"
 	"github.com/sametkarademir/forge/internal/core/ui"
+	"github.com/sametkarademir/forge/internal/modules/docker/engines"
+	"github.com/sametkarademir/forge/internal/modules/docker/preset"
 	"github.com/sametkarademir/forge/internal/modules/docker/service"
 	"github.com/spf13/cobra"
 )
@@ -17,6 +23,7 @@ func NewConnCommand() *cobra.Command {
 		copy    bool
 		jsonOut bool
 		quiet   bool
+		format  string
 	)
 
 	cmd := &cobra.Command{
@@ -45,6 +52,46 @@ supplied, only the bare unmasked DSN is printed — suitable for piping:
 				}
 				logger.Success("Connection string copied to clipboard.")
 				return nil
+			}
+
+			// --format: use FormatProvider if engine supports it.
+			if format != "" {
+				p, err := preset.Load(args[0])
+				if err != nil {
+					logger.Error(err.Error())
+					return err
+				}
+				eng, ok := engines.Get(p.Engine)
+				if !ok {
+					return engines.ErrUnknownEngine(p.Engine)
+				}
+				fp, ok := eng.(engines.FormatProvider)
+				if !ok {
+					return fmt.Errorf("engine %q does not support --format (only primary DSN available)", p.Engine)
+				}
+				hostPort, err := service.GetPresetHostPort(cmd.Context(), args[0])
+				if err != nil {
+					logger.Error(err.Error())
+					return err
+				}
+				formats := fp.ConnectionFormats(engines.ConnArgs{
+					Host:     "localhost",
+					HostPort: hostPort,
+					User:     p.Username,
+					Password: p.Password,
+					Database: p.Database,
+					Options:  p.Options,
+				})
+				if val, ok := formats[strings.ToLower(format)]; ok {
+					logger.Plain(val)
+					return nil
+				}
+				keys := make([]string, 0, len(formats))
+				for k := range formats {
+					keys = append(keys, k)
+				}
+				sort.Strings(keys)
+				return fmt.Errorf("unknown format %q — available for %s: %s", format, p.Engine, strings.Join(keys, ", "))
 			}
 
 			if jsonOut {
@@ -81,5 +128,6 @@ supplied, only the bare unmasked DSN is printed — suitable for piping:
 	cmd.Flags().BoolVarP(&copy, "copy", "c", false, "Copy the connection string to the clipboard (macOS)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
 	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Print only the DSN, no decoration (alias for --raw)")
+	cmd.Flags().StringVar(&format, "format", "", "Output a specific connection-string format (e.g. uri, jdbc, psql, cli, ado, sqlcmd)")
 	return cmd
 }

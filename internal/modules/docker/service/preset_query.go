@@ -223,6 +223,20 @@ func LogsPreset(ctx context.Context, name string, opts dockerclient.LogsOptions)
 	return dc.ContainerLogs(ctx, c.ID, opts)
 }
 
+// GetPresetHostPort returns the host port assigned to a running preset container.
+func GetPresetHostPort(ctx context.Context, name string) (int, error) {
+	dc, err := dockerclient.NewClient()
+	if err != nil {
+		return 0, err
+	}
+	c, err := dc.InspectByPreset(ctx, name)
+	if err != nil {
+		return 0, fmt.Errorf("preset %q has no container — start with: forge docker run %s", name, name)
+	}
+	port, _ := strconv.Atoi(c.Config.Labels["forge.host_port"])
+	return port, nil
+}
+
 // ConnString returns the unmasked DSN for a running preset container.
 // Returns an error if the container is not running.
 func ConnString(ctx context.Context, name string) (string, error) {

@@ -40,6 +40,15 @@ func (m *mssql) ShellCmd(_, password, _ string) []string {
 	return []string{"/opt/mssql-tools/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", password}
 }
 
+func (m *mssql) ConnectionFormats(a ConnArgs) map[string]string {
+	ado := fmt.Sprintf("Server=%s,%d;Database=%s;User Id=sa;Password=%s;TrustServerCertificate=true",
+		a.Host, a.HostPort, a.Database, a.Password)
+	jdbc := fmt.Sprintf("jdbc:sqlserver://%s:%d;database=%s;user=sa;password=%s;trustServerCertificate=true",
+		a.Host, a.HostPort, a.Database, a.Password)
+	sqlcmd := fmt.Sprintf("sqlcmd -S %s,%d -U sa -P %s", a.Host, a.HostPort, a.Password)
+	return map[string]string{"ado": ado, "jdbc": jdbc, "sqlcmd": sqlcmd}
+}
+
 // ValidatePassword enforces SQL Server 2019+ SA_PASSWORD complexity rules.
 func (m *mssql) ValidatePassword(password string) error {
 	var failures []string

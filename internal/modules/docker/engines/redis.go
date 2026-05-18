@@ -72,3 +72,13 @@ func (r *redis) ValidatePassword(password string) error {
 func (r *redis) ShellCmd(_, password, _ string) []string {
 	return []string{"redis-cli", "-a", password}
 }
+
+func (r *redis) ConnectionFormats(a ConnArgs) map[string]string {
+	dbIndex := 0
+	if n, err := strconv.Atoi(a.Database); err == nil && n >= 0 && n <= 15 {
+		dbIndex = n
+	}
+	uri := fmt.Sprintf("redis://:%s@%s:%d/%d", a.Password, a.Host, a.HostPort, dbIndex)
+	cli := fmt.Sprintf("redis-cli -h %s -p %d -a %s", a.Host, a.HostPort, a.Password)
+	return map[string]string{"uri": uri, "cli": cli}
+}

@@ -49,6 +49,13 @@ func (p *postgres) ShellCmd(user, _, db string) []string {
 	return []string{"psql", "-U", user, "-d", db}
 }
 
+func (p *postgres) ConnectionFormats(a ConnArgs) map[string]string {
+	uri := fmt.Sprintf("postgres://%s:%s@%s:%d/%s", a.User, a.Password, a.Host, a.HostPort, a.Database)
+	jdbc := fmt.Sprintf("jdbc:postgresql://%s:%d/%s?user=%s&password=%s", a.Host, a.HostPort, a.Database, a.User, a.Password)
+	psql := fmt.Sprintf("psql -h %s -p %d -U %s -d %s", a.Host, a.HostPort, a.User, a.Database)
+	return map[string]string{"uri": uri, "jdbc": jdbc, "psql": psql}
+}
+
 // pgMajorVersion parses the major version number from an image tag such as
 // "postgres:18-alpine", "postgres:17.2", or "postgis/postgis:18-3.5-alpine".
 // Returns 0 if the version cannot be determined (e.g. "latest").
