@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/sametkarademir/forge/internal/core/logger"
@@ -45,6 +46,13 @@ func NewShowCommand() *cobra.Command {
 			}
 
 			ui.RenderTable([]string{"Setting", "Value"}, rows)
+
+			switch view.Status {
+			case "not created":
+				logger.Info(fmt.Sprintf("→ Start with: forge docker run %s", args[0]))
+			case "exited", "stopped":
+				logger.Info(fmt.Sprintf("→ Resume with: forge docker run %s", args[0]))
+			}
 			return nil
 		},
 	}
