@@ -35,7 +35,13 @@ func colorStatus(s string) string {
 
 // NewListCommand returns the command that lists all presets and their container status.
 func NewListCommand() *cobra.Command {
-	return &cobra.Command{
+	var (
+		filterEngine string
+		filterStatus string
+		orphanedOnly bool
+	)
+
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all presets and their container status",
 		Args:  cobra.NoArgs,
@@ -45,6 +51,22 @@ func NewListCommand() *cobra.Command {
 				logger.Error(err.Error())
 				return err
 			}
+
+			// Apply filters.
+			filtered := rows[:0]
+			for _, r := range rows {
+				if filterEngine != "" && r.Engine != filterEngine {
+					continue
+				}
+				if filterStatus != "" && r.Status != filterStatus {
+					continue
+				}
+				if orphanedOnly && r.Status != "orphaned" && r.Status != "legacy" {
+					continue
+				}
+				filtered = append(filtered, r)
+			}
+			rows = filtered
 
 			if len(rows) == 0 {
 				logger.Info("No presets or managed containers found.")
@@ -78,4 +100,9 @@ func NewListCommand() *cobra.Command {
 			return nil
 		},
 	}
+
+	cmd.Flags().StringVar(&filterEngine, "engine", "", "Filter by engine name (e.g. postgres, redis)")
+	cmd.Flags().StringVar(&filterStatus, "status", "", "Filter by status (running, stopped, orphaned, legacy, not created)")
+	cmd.Flags().BoolVar(&orphanedOnly, "orphaned", false, "Show only orphaned and legacy containers")
+	return cmd
 }
