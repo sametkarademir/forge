@@ -13,6 +13,7 @@ func NewRunCommand() *cobra.Command {
 	var (
 		noWait  bool
 		timeout int
+		quiet   bool
 	)
 
 	cmd := &cobra.Command{
@@ -28,6 +29,10 @@ func NewRunCommand() *cobra.Command {
 				logger.Error(err.Error())
 				return err
 			}
+			if quiet {
+				logger.Plain(fmt.Sprintf("%d", info.HostPort))
+				return nil
+			}
 			logger.Success(fmt.Sprintf("Running %s on port %d", args[0], info.HostPort))
 			if info.ConnectionString != "" {
 				logger.Info("  Connection: " + info.ConnectionString)
@@ -41,5 +46,6 @@ func NewRunCommand() *cobra.Command {
 
 	cmd.Flags().BoolVar(&noWait, "no-wait", false, "Skip waiting for the DB to accept connections")
 	cmd.Flags().IntVar(&timeout, "timeout", 0, "Readiness timeout in seconds (default: from config)")
+	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Print only the host port (script-friendly)")
 	return cmd
 }

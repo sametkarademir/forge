@@ -16,6 +16,7 @@ func NewConnCommand() *cobra.Command {
 		raw     bool
 		copy    bool
 		jsonOut bool
+		quiet   bool
 	)
 
 	cmd := &cobra.Command{
@@ -62,7 +63,7 @@ supplied, only the bare unmasked DSN is printed — suitable for piping:
 				return ui.EmitJSON(out)
 			}
 
-			if raw || !ui.IsInteractive() {
+			if raw || quiet || !ui.IsInteractive() {
 				logger.Plain(view.Primary)
 				return nil
 			}
@@ -79,5 +80,6 @@ supplied, only the bare unmasked DSN is printed — suitable for piping:
 	cmd.Flags().BoolVar(&raw, "raw", false, "Print only the unmasked DSN (pipe-friendly)")
 	cmd.Flags().BoolVarP(&copy, "copy", "c", false, "Copy the connection string to the clipboard (macOS)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
+	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Print only the DSN, no decoration (alias for --raw)")
 	return cmd
 }
