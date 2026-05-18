@@ -12,7 +12,10 @@ import (
 // When stdout is not a TTY, or --raw is passed, it prints only the unmasked DSN via logger.Plain
 // so the output is pipe-friendly (e.g. `forge docker conn mypreset | pbcopy`).
 func NewConnCommand() *cobra.Command {
-	var raw bool
+	var (
+		raw  bool
+		copy bool
+	)
 
 	cmd := &cobra.Command{
 		Use:   "conn <preset>",
@@ -24,13 +27,22 @@ By default, prints a table with the connection string and any additional endpoin
 supplied, only the bare unmasked DSN is printed — suitable for piping:
 
   forge docker conn mypreset --raw | pbcopy
-  eval $(forge docker conn mypreset --raw)`,
+  forge docker conn mypreset --copy`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			view, err := service.GetConnView(cmd.Context(), args[0])
 			if err != nil {
 				logger.Error(err.Error())
 				return err
+			}
+
+			if copy {
+				if err := ui.CopyToClipboard(view.Primary); err != nil {
+					logger.Error(err.Error())
+					return err
+				}
+				logger.Success("Connection string copied to clipboard.")
+				return nil
 			}
 
 			if raw || !ui.IsInteractive() {
@@ -48,5 +60,6 @@ supplied, only the bare unmasked DSN is printed — suitable for piping:
 	}
 
 	cmd.Flags().BoolVar(&raw, "raw", false, "Print only the unmasked DSN (pipe-friendly)")
+	cmd.Flags().BoolVarP(&copy, "copy", "c", false, "Copy the connection string to the clipboard (macOS)")
 	return cmd
 }
