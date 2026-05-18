@@ -319,3 +319,130 @@ func extractLegacyName(c dockertypes.Container, engineName string) string {
 	}
 	return raw
 }
+
+// PruneTarget is one managed resource that prune would remove.
+type PruneTarget struct {
+	Kind   string // "container" or "volume"
+	Name   string // human-readable name
+	ID     string // Docker ID (containers only)
+	Reason string // why it is a prune candidate
+}
+
+// FindOrphans returns managed containers and volumes that have no matching preset file.
+// Orphaned: forge.preset label set but no preset YAML.
+// Legacy: no forge.preset label (pre-refactor containers).
+// Dangling volumes: forge.managed=true but preset YAML and container are both gone.
+func FindOrphans(ctx context.Context) ([]PruneTarget, error) {
+	dc, err := dockerclient.NewClient()
+	if err != nil {
+		return nil, err
+	}
+
+	containers, err := dc.ListManaged(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list containers: %w", err)
+	}
+
+	volumes, err := dc.ListManagedVolumes(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list volumes: %w", err)
+	}
+
+	var targets []PruneTarget
+	activeVolumeNames := map[string]bool{}
+
+	for _, c := range containers {
+		cname := ""
+		if len(c.Names) > 0 {
+			cname = strings.TrimPrefix(c.Names[0], "/")
+		}
+		if pname := c.Labels["forge.preset"]; pname != "" {
+			if !preset.Exists(pname) {
+				targets = append(targets, PruneTarget{
+					Kind:   "container",
+					Name:   cname,
+					ID:     c.ID,
+					Reason: fmt.Sprintf("orphaned — no preset %q", pname),
+				})
+				continue
+			}
+		} else {
+			targets = append(targets, PruneTarget{
+				Kind:   "container",
+				Name:   cname,
+				ID:     c.ID,
+				Reason: "legacy — pre-v2 container without forge.preset label",
+			})
+			continue
+		}
+		// Container has a valid preset — its volume is in use.
+		if vname := c.Labels["forge.preset"]; vname != "" {
+			activeVolumeNames["forge-"+vname+"-data"] = true
+		}
+	}
+
+	// Volumes with no matching container.
+	for _, v := range volumes {
+		if !activeVolumeNames[v.Name] {
+			pname := v.Labels["forge.preset"]
+			if pname != "" && preset.Exists(pname) {
+				continue // preset exists and container may just be stopped — not dangling
+			}
+			reason := "dangling — no matching container or preset"
+			if pname != "" {
+				reason = fmt.Sprintf("dangling — preset %q no longer exists", pname)
+			}
+			targets = append(targets, PruneTarget{
+				Kind:   "volume",
+				Name:   v.Name,
+				Reason: reason,
+			})
+		}
+	}
+
+	return targets, nil
+}
+
+// Prune removes the given targets. Targets should come from FindOrphans.
+func Prune(ctx context.Context, targets []PruneTarget) error {
+	dc, err := dockerclient.NewClient()
+	if err != nil {
+		return err
+	}
+	for _, t := range targets {
+		switch t.Kind {
+		case "container":
+			_ = dc.StopContainer(ctx, t.ID)
+			if err := dc.RemoveContainer(ctx, t.ID); err != nil {
+				return fmt.Errorf("remove container %s: %w", t.Name, err)
+			}
+			logger.Success("Removed container " + t.Name)
+		case "volume":
+			if err := dc.VolumeRemove(ctx, t.Name); err != nil {
+				return fmt.Errorf("remove volume %s: %w", t.Name, err)
+			}
+			logger.Success("Removed volume " + t.Name)
+		}
+	}
+	return nil
+}
+
+// PruneNetwork removes forge-net if it has no connected containers.
+func PruneNetwork(ctx context.Context, networkName string) error {
+	dc, err := dockerclient.NewClient()
+	if err != nil {
+		return err
+	}
+	empty, err := dc.IsNetworkEmpty(ctx, networkName)
+	if err != nil {
+		return fmt.Errorf("check network: %w", err)
+	}
+	if !empty {
+		return fmt.Errorf("network %q still has connected containers — stop all presets first", networkName)
+	}
+	if err := dc.RemoveNetwork(ctx, networkName); err != nil {
+		return fmt.Errorf("remove network %s: %w", networkName, err)
+	}
+	logger.Success("Removed network " + networkName)
+	return nil
+}
