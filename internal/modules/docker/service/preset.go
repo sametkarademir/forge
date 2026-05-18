@@ -327,9 +327,14 @@ func StopPreset(ctx context.Context, name string) error {
 	return nil
 }
 
-// ResetPreset stops and wipes the container and volume, then recreates on the
-// same port. Returns *PortConflictError if the original port is now occupied.
-func ResetPreset(ctx context.Context, name string) error {
+// ResetOptions controls ResetPreset behaviour.
+type ResetOptions struct {
+	KeepVolume bool // if true, only recreate the container without wiping the volume
+}
+
+// ResetPreset stops and wipes the container (and optionally the volume), then
+// recreates on the same port. Returns *PortConflictError if the port is busy.
+func ResetPreset(ctx context.Context, name string, opts ResetOptions) error {
 	if _, err := preset.Load(name); err != nil {
 		return err
 	}
@@ -359,8 +364,10 @@ func ResetPreset(ctx context.Context, name string) error {
 	if err := dc.RemoveContainer(ctx, c.ID); err != nil {
 		return fmt.Errorf("remove container: %w", err)
 	}
-	if err := dc.VolumeRemove(ctx, PresetVolumeName(name)); err != nil {
-		return fmt.Errorf("remove volume: %w", err)
+	if !opts.KeepVolume {
+		if err := dc.VolumeRemove(ctx, PresetVolumeName(name)); err != nil {
+			return fmt.Errorf("remove volume: %w", err)
+		}
 	}
 
 	if port != 0 && !IsPortFree(port) {
