@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"strconv"
 
@@ -101,7 +102,60 @@ func promptUser() (string, error) {
 	})
 }
 
+// generatePassword produces a 20-character password that satisfies the mssql
+// complexity policy (and therefore any less-strict engine as well):
+// uppercase, lowercase, digit, one special character, and random padding.
+func generatePassword() string {
+	const (
+		upper   = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+		lower   = "abcdefghjkmnpqrstuvwxyz"
+		digits  = "23456789"
+		special = "!@#$%^&*"
+		all     = upper + lower + digits + special
+	)
+	buf := make([]byte, 20)
+	// Guarantee at least one of each required class at known positions.
+	buf[0] = pickRand(upper)
+	buf[1] = pickRand(lower)
+	buf[2] = pickRand(digits)
+	buf[3] = pickRand(special)
+	for i := 4; i < len(buf); i++ {
+		buf[i] = pickRand(all)
+	}
+	// Shuffle the fixed positions to avoid predictable prefix.
+	for i := len(buf) - 1; i > 0; i-- {
+		j := int(pickRand(all)) % (i + 1)
+		buf[i], buf[j] = buf[j], buf[i]
+	}
+	return string(buf)
+}
+
+func pickRand(charset string) byte {
+	n := len(charset)
+	b := make([]byte, 1)
+	for {
+		_, _ = rand.Read(b)
+		if int(b[0]) < (256/n)*n { // avoid modulo bias
+			return charset[int(b[0])%n]
+		}
+	}
+}
+
 func promptPassword(eng engines.Engine) (string, error) {
+	gen, err := ui.Confirm("Generate a secure password?")
+	if err != nil {
+		return "", err
+	}
+	if gen {
+		pwd := generatePassword()
+		// Retry if engine rejects (shouldn't happen for well-formed generator).
+		for eng.ValidatePassword(pwd) != nil {
+			pwd = generatePassword()
+		}
+		fmt.Printf("  Generated password: %s\n", pwd)
+		fmt.Println("  (Save this — it won't be shown again.)")
+		return pwd, nil
+	}
 	return ui.Password("DB password", eng.ValidatePassword)
 }
 
