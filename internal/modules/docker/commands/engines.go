@@ -1,6 +1,10 @@
 package commands
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/sametkarademir/forge/internal/core/ui"
 	"github.com/sametkarademir/forge/internal/modules/docker/engines"
 	"github.com/spf13/cobra"
@@ -15,9 +19,19 @@ func NewEnginesCommand() *cobra.Command {
 			all := engines.All()
 			rows := make([][]string, 0, len(all))
 			for _, e := range all {
-				rows = append(rows, []string{e.Name(), e.DefaultImage()})
+				repos := strings.Join(e.ImageRepos(), ", ")
+				port := strconv.Itoa(e.DefaultPort())
+				extra := ""
+				if epp, ok := e.(engines.ExtraPortProvider); ok {
+					var parts []string
+					for _, ep := range epp.ExtraPorts(e.DefaultImage(), nil) {
+						parts = append(parts, fmt.Sprintf("%s (%d)", ep.Label, ep.ContainerPort))
+					}
+					extra = strings.Join(parts, ", ")
+				}
+				rows = append(rows, []string{e.Name(), e.DefaultImage(), repos, port, extra})
 			}
-			ui.RenderTable([]string{"ENGINE", "DEFAULT IMAGE"}, rows)
+			ui.RenderTable([]string{"ENGINE", "DEFAULT IMAGE", "IMAGE REPOS", "PORT", "EXTRA PORTS"}, rows)
 			return nil
 		},
 	}
