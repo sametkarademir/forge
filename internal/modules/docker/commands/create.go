@@ -15,24 +15,143 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewCreateCommand returns the interactive preset-creation wizard.
+// NewCreateCommand returns the preset-creation command.
+// When all required flags are provided (--engine, --user, --password, --db) it runs
+// non-interactively. Otherwise it falls through to the interactive wizard.
 func NewCreateCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "create",
-		Short: "Create a database preset (interactive wizard)",
-		Args: func(_ *cobra.Command, args []string) error {
-			if len(args) > 0 {
-				return fmt.Errorf("'create' takes no arguments — run it bare: forge docker create")
+	var (
+		flagEngine   string
+		flagUser     string
+		flagPassword string
+		flagDB       string
+		flagPort     int
+		flagImage    string
+		flagOptions  []string
+		flagRun      bool
+	)
+
+	cmd := &cobra.Command{
+		Use:   "create [<preset-name>]",
+		Short: "Create a database preset (interactive wizard or --flags)",
+		Long: `Create a preset interactively, or supply all required flags for non-interactive use:
+
+  forge docker create mydb --engine postgres --user alice --password S3cret! --db myapp
+  forge docker create rabbit --engine rabbitmq --user admin --password P@ssw0rd --db / --option mgmt_host_port=15672`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Flag-driven mode: engine + user + password + db all provided.
+			flagsProvided := flagEngine != "" && flagUser != "" && flagPassword != "" && flagDB != ""
+			if flagsProvided {
+				name := ""
+				if len(args) > 0 {
+					name = args[0]
+				}
+				return runCreateFromFlags(cmd.Context(), name, flagEngine, flagUser, flagPassword, flagDB, flagPort, flagImage, flagOptions, flagRun)
 			}
-			return nil
-		},
-		RunE: func(cmd *cobra.Command, _ []string) error {
+
 			if !ui.IsInteractive() {
-				return fmt.Errorf("forge docker create requires an interactive terminal")
+				return fmt.Errorf(
+					"forge docker create requires an interactive terminal, or use flags:\n" +
+						"  forge docker create <name> --engine <engine> --user <user> --password <pass> --db <db>",
+				)
 			}
 			return runCreateWizard(cmd.Context())
 		},
 	}
+
+	cmd.Flags().StringVar(&flagEngine, "engine", "", "Engine name (postgres, mysql, mssql, redis, rabbitmq)")
+	cmd.Flags().StringVar(&flagUser, "user", "", "DB username")
+	cmd.Flags().StringVar(&flagPassword, "password", "", "DB password")
+	cmd.Flags().StringVar(&flagDB, "db", "", "Database name (or vhost for RabbitMQ, index for Redis)")
+	cmd.Flags().IntVar(&flagPort, "port", 0, "Host port (0 = auto-assign)")
+	cmd.Flags().StringVar(&flagImage, "image", "", "Docker image (default: engine's default)")
+	cmd.Flags().StringArrayVar(&flagOptions, "option", nil, "Engine-specific option as key=value (repeatable)")
+	cmd.Flags().BoolVar(&flagRun, "run", false, "Start the container immediately after creating the preset")
+	return cmd
+}
+
+func runCreateFromFlags(ctx context.Context, name, engineName, user, password, db string, port int, image string, rawOpts []string, runNow bool) error {
+	eng, ok := engines.Get(engineName)
+	if !ok {
+		return engines.ErrUnknownEngine(engineName)
+	}
+
+	if name == "" {
+		return fmt.Errorf("preset name required as positional argument: forge docker create <name> --engine ...")
+	}
+	if err := preset.ValidateName(name); err != nil {
+		return err
+	}
+	if preset.Exists(name) {
+		return fmt.Errorf("preset %q already exists — choose another name", name)
+	}
+	if err := eng.ValidatePassword(password); err != nil {
+		return fmt.Errorf("invalid password: %w", err)
+	}
+
+	if image == "" {
+		cfg := config.EngineDefaultImage(engineName)
+		if cfg != "" {
+			image = cfg
+		} else {
+			image = eng.DefaultImage()
+		}
+	}
+
+	options := map[string]string{}
+	for _, kv := range rawOpts {
+		idx := -1
+		for i, ch := range kv {
+			if ch == '=' {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			return fmt.Errorf("invalid --option %q: must be key=value", kv)
+		}
+		options[kv[:idx]] = kv[idx+1:]
+	}
+	if len(options) == 0 {
+		options = nil
+	}
+
+	p := &preset.Preset{
+		SchemaVersion: 2,
+		Name:          name,
+		Engine:        engineName,
+		Image:         image,
+		Database:      db,
+		Username:      user,
+		Password:      password,
+		InternalPort:  eng.DefaultPort(),
+		HostPort:      port,
+		Options:       options,
+		CreatedAt:     time.Now().UTC(),
+	}
+	if err := service.CreatePreset(ctx, p, true); err != nil {
+		logger.Error(err.Error())
+		return err
+	}
+	logger.Success(fmt.Sprintf("Preset %q saved to ~/.forge/presets/%s.yaml", name, name))
+
+	if !runNow {
+		logger.Info(fmt.Sprintf("Run with: forge docker run %s", name))
+		return nil
+	}
+
+	info, err := service.RunPreset(ctx, name, service.RunOptions{})
+	if err != nil {
+		logger.Error(err.Error())
+		return err
+	}
+	if info.ConnectionString != "" {
+		logger.Info("  Connection: " + info.ConnectionString)
+	}
+	for _, ep := range info.Endpoints {
+		logger.Info("  " + ep.Label + ": " + ep.Value)
+	}
+	return nil
 }
 
 func runCreateWizard(ctx context.Context) error {
