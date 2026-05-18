@@ -13,8 +13,9 @@ import (
 // so the output is pipe-friendly (e.g. `forge docker conn mypreset | pbcopy`).
 func NewConnCommand() *cobra.Command {
 	var (
-		raw  bool
-		copy bool
+		raw     bool
+		copy    bool
+		jsonOut bool
 	)
 
 	cmd := &cobra.Command{
@@ -45,6 +46,22 @@ supplied, only the bare unmasked DSN is printed — suitable for piping:
 				return nil
 			}
 
+			if jsonOut {
+				type jsonConn struct {
+					Connection string            `json:"connection"`
+					Endpoints  map[string]string `json:"endpoints,omitempty"`
+				}
+				eps := make(map[string]string, len(view.Endpoints))
+				for _, ep := range view.Endpoints {
+					eps[ep.Label] = ep.Value
+				}
+				out := jsonConn{Connection: view.Primary}
+				if len(eps) > 0 {
+					out.Endpoints = eps
+				}
+				return ui.EmitJSON(out)
+			}
+
 			if raw || !ui.IsInteractive() {
 				logger.Plain(view.Primary)
 				return nil
@@ -61,5 +78,6 @@ supplied, only the bare unmasked DSN is printed — suitable for piping:
 
 	cmd.Flags().BoolVar(&raw, "raw", false, "Print only the unmasked DSN (pipe-friendly)")
 	cmd.Flags().BoolVarP(&copy, "copy", "c", false, "Copy the connection string to the clipboard (macOS)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
 	return cmd
 }

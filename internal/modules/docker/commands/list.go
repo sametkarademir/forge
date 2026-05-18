@@ -39,6 +39,7 @@ func NewListCommand() *cobra.Command {
 		filterEngine string
 		filterStatus string
 		orphanedOnly bool
+		jsonOut      bool
 	)
 
 	cmd := &cobra.Command{
@@ -69,8 +70,15 @@ func NewListCommand() *cobra.Command {
 			rows = filtered
 
 			if len(rows) == 0 {
+				if jsonOut {
+					return ui.EmitJSON([]service.Row{})
+				}
 				logger.Info("No presets or managed containers found.")
 				return nil
+			}
+
+			if jsonOut {
+				return ui.EmitJSON(rows)
 			}
 
 			tableRows := make([][]string, 0, len(rows))
@@ -104,5 +112,6 @@ func NewListCommand() *cobra.Command {
 	cmd.Flags().StringVar(&filterEngine, "engine", "", "Filter by engine name (e.g. postgres, redis)")
 	cmd.Flags().StringVar(&filterStatus, "status", "", "Filter by status (running, stopped, orphaned, legacy, not created)")
 	cmd.Flags().BoolVar(&orphanedOnly, "orphaned", false, "Show only orphaned and legacy containers")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
 	return cmd
 }

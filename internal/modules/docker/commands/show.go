@@ -12,7 +12,9 @@ import (
 
 // NewShowCommand returns the command that shows preset config and container state.
 func NewShowCommand() *cobra.Command {
-	return &cobra.Command{
+	var jsonOut bool
+
+	cmd := &cobra.Command{
 		Use:   "show <preset>",
 		Short: "Show preset configuration and container status",
 		Args:  cobra.ExactArgs(1),
@@ -21,6 +23,33 @@ func NewShowCommand() *cobra.Command {
 			if err != nil {
 				logger.Error(err.Error())
 				return err
+			}
+
+			if jsonOut {
+				// Password masked in JSON output.
+				type jsonView struct {
+					Name         string `json:"name"`
+					Engine       string `json:"engine"`
+					Image        string `json:"image"`
+					Username     string `json:"username"`
+					Database     string `json:"database"`
+					InternalPort int    `json:"internal_port"`
+					HostPort     int    `json:"host_port,omitempty"`
+					Status       string `json:"status"`
+					Connection   string `json:"connection,omitempty"`
+				}
+				p := view.Preset
+				return ui.EmitJSON(jsonView{
+					Name:         p.Name,
+					Engine:       p.Engine,
+					Image:        p.Image,
+					Username:     p.Username,
+					Database:     p.Database,
+					InternalPort: p.InternalPort,
+					HostPort:     view.HostPort,
+					Status:       view.Status,
+					Connection:   view.Primary,
+				})
 			}
 
 			p := view.Preset
@@ -56,4 +85,7 @@ func NewShowCommand() *cobra.Command {
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON (password masked)")
+	return cmd
 }
