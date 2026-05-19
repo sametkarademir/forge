@@ -5,26 +5,30 @@ BINARY="${BINARY:-forge}"
 PROJECT="smoke-create-$$"
 
 cleanup() {
-  "$BINARY" docker remove "$PROJECT" --yes 2>/dev/null || true
+  "$BINARY" docker remove "$PROJECT" --purge --yes 2>/dev/null || true
 }
 trap cleanup EXIT
 
 echo "=== smoke: docker create ==="
 
-# Create a postgres container
-output=$("$BINARY" docker create "$PROJECT" --engine postgres 2>&1)
-echo "$output"
+# Non-interactive flag-driven create + immediate run.
+"$BINARY" docker create "$PROJECT" \
+  --engine postgres \
+  --user smokeuser \
+  --password SmokePass1! \
+  --db smokedb \
+  --run
 
 # Verify container is running
-state=$(docker inspect "forge-${PROJECT}-postgres" --format '{{.State.Running}}' 2>/dev/null)
+state=$(docker inspect "forge-${PROJECT}" --format '{{.State.Running}}' 2>/dev/null)
 if [[ "$state" != "true" ]]; then
   echo "FAIL: container not running (state=$state)"
   exit 1
 fi
 
-# Verify all five required labels
-labels=$(docker inspect "forge-${PROJECT}-postgres" --format '{{json .Config.Labels}}' 2>/dev/null)
-for key in forge.managed forge.project forge.engine forge.created_at forge.host_port; do
+# Verify required labels (v2 schema uses forge.preset not forge.project)
+labels=$(docker inspect "forge-${PROJECT}" --format '{{json .Config.Labels}}' 2>/dev/null)
+for key in forge.managed forge.preset forge.engine forge.created_at forge.host_port; do
   if ! echo "$labels" | grep -q "\"$key\""; then
     echo "FAIL: missing label $key"
     exit 1
@@ -32,14 +36,19 @@ for key in forge.managed forge.project forge.engine forge.created_at forge.host_
 done
 
 # Verify connection string printed
-if ! echo "$output" | grep -q "postgres://"; then
-  echo "FAIL: connection string not printed"
+conn=$("$BINARY" docker conn "$PROJECT" --raw)
+if [[ -z "$conn" ]]; then
+  echo "FAIL: connection string empty"
   exit 1
 fi
 
-# Verify duplicate create is rejected
+# Verify duplicate create is rejected.
 set +e
-dup_output=$("$BINARY" docker create "$PROJECT" --engine postgres 2>&1)
+"$BINARY" docker create "$PROJECT" \
+  --engine postgres \
+  --user smokeuser \
+  --password SmokePass1! \
+  --db smokedb 2>&1
 dup_exit=$?
 set -e
 if [[ $dup_exit -eq 0 ]]; then

@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/volume"
 )
 
@@ -19,4 +20,14 @@ func (dc *DockerClient) VolumeRemove(ctx context.Context, name string) error {
 		return err
 	}
 	return nil
+}
+
+// ListManagedVolumes returns all volumes carrying the forge.managed=true label.
+func (dc *DockerClient) ListManagedVolumes(ctx context.Context) ([]*volume.Volume, error) {
+	f := filters.NewArgs(filters.KeyValuePair{Key: "label", Value: "forge.managed=true"})
+	resp, err := dc.cli.VolumeList(ctx, volume.ListOptions{Filters: f})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Volumes, nil
 }

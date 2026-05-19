@@ -124,3 +124,21 @@ type WizardPromptProvider interface {
 	Engine
 	WizardPrompts(image string) []OptionPrompt
 }
+
+// ShellProvider is implemented by engines that support an interactive shell
+// command (psql, mysql, redis-cli, etc.). The returned argv is run inside
+// the container via `docker exec -it`.
+// user and db may be empty strings if the engine doesn't require them.
+type ShellProvider interface {
+	Engine
+	ShellCmd(user, password, db string) []string
+}
+
+// FormatProvider is implemented by engines that support multiple connection-string
+// formats (e.g. psql URI vs JDBC vs DSN). Engines that do not implement this
+// interface only expose their single primary format.
+// Keys are short labels like "uri", "jdbc", "cli"; values are the formatted strings.
+type FormatProvider interface {
+	Engine
+	ConnectionFormats(args ConnArgs) map[string]string
+}

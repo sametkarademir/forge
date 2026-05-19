@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"os/exec"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -151,14 +153,41 @@ func (dc *DockerClient) RemoveContainer(ctx context.Context, id string) error {
 	return dc.cli.ContainerRemove(ctx, id, container.RemoveOptions{Force: true})
 }
 
+// LogsOptions controls ContainerLogs behaviour.
+type LogsOptions struct {
+	Follow bool
+	Tail   string // number of lines or "all"; empty means all
+	Since  string // duration string e.g. "5m", "1h", or RFC3339 timestamp
+}
+
+// ExecInteractive runs argv inside the container as an interactive process,
+// connecting the current terminal's stdin/stdout/stderr directly.
+// Callers should use os/exec or syscall.Exec to replace the process; this
+// implementation delegates to the host `docker exec` binary so PTY allocation
+// works correctly without reimplementing terminal raw-mode handling.
+func (dc *DockerClient) ExecInteractive(containerID string, argv []string) error {
+	args := append([]string{"exec", "-it", containerID}, argv...)
+	cmd := exec.Command("docker", args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
 // ContainerLogs returns a stream of the container's stdout and stderr.
 // The stream is Docker's multiplexed format; callers should use
 // stdcopy.StdCopy(stdout, stderr, rc) to demultiplex correctly.
-func (dc *DockerClient) ContainerLogs(ctx context.Context, id string, follow bool) (io.ReadCloser, error) {
+func (dc *DockerClient) ContainerLogs(ctx context.Context, id string, opts LogsOptions) (io.ReadCloser, error) {
+	tail := opts.Tail
+	if tail == "" {
+		tail = "all"
+	}
 	return dc.cli.ContainerLogs(ctx, id, container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
-		Follow:     follow,
+		Follow:     opts.Follow,
 		Timestamps: false,
+		Tail:       tail,
+		Since:      opts.Since,
 	})
 }

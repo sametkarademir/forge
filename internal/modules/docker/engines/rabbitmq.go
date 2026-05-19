@@ -60,6 +60,10 @@ func (r *rabbitmq) ValidatePassword(password string) error {
 	return nil
 }
 
+func (r *rabbitmq) ShellCmd(user, password, _ string) []string {
+	return []string{"rabbitmqctl", "authenticate_user", user, password}
+}
+
 // ExtraPorts returns the Management UI port binding for management-variant images.
 // Non-management images (e.g. rabbitmq:3-alpine) do not expose 15672, so nil is returned.
 func (r *rabbitmq) ExtraPorts(image string, _ map[string]string) []ExtraPort {

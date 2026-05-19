@@ -12,7 +12,10 @@ import (
 )
 
 func NewResetCommand() *cobra.Command {
-	var yes bool
+	var (
+		yes        bool
+		keepVolume bool
+	)
 
 	cmd := &cobra.Command{
 		Use:   "reset <preset>",
@@ -22,14 +25,18 @@ func NewResetCommand() *cobra.Command {
 			name := args[0]
 
 			if !yes {
-				ok, err := ui.Confirm(fmt.Sprintf("This will DELETE all data for preset %q. Continue?", name))
+				msg := fmt.Sprintf("This will DELETE all data for preset %q. Continue?", name)
+				if keepVolume {
+					msg = fmt.Sprintf("This will recreate the container for preset %q (volume kept). Continue?", name)
+				}
+				ok, err := ui.Confirm(msg)
 				if err != nil || !ok {
 					logger.Info("Aborted.")
 					return nil
 				}
 			}
 
-			if err := service.ResetPreset(cmd.Context(), name); err != nil {
+			if err := service.ResetPreset(cmd.Context(), name, service.ResetOptions{KeepVolume: keepVolume}); err != nil {
 				var portErr *service.PortConflictError
 				if errors.As(err, &portErr) {
 					logger.Error(fmt.Sprintf("port %d is in use by another process:", portErr.Port))
@@ -49,5 +56,6 @@ func NewResetCommand() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Skip confirmation prompt")
+	cmd.Flags().BoolVar(&keepVolume, "keep-volume", false, "Recreate container only, preserve data volume")
 	return cmd
 }

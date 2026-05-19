@@ -16,7 +16,7 @@ const (
 )
 
 func NewRemoveCommand() *cobra.Command {
-	var yes, purge bool
+	var yes, purge, purgeNetwork bool
 
 	cmd := &cobra.Command{
 		Use:   "remove <preset>",
@@ -58,11 +58,18 @@ func NewRemoveCommand() *cobra.Command {
 			} else {
 				logger.Success(fmt.Sprintf("Removed container and volume for preset %q.", name))
 			}
+
+			if purgeNetwork {
+				if err := service.PruneNetwork(cmd.Context(), "forge-net"); err != nil {
+					logger.Warn(err.Error())
+				}
+			}
 			return nil
 		},
 	}
 
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Remove container and volume, keep preset config")
 	cmd.Flags().BoolVar(&purge, "purge", false, "Remove container, volume, and preset config")
+	cmd.Flags().BoolVar(&purgeNetwork, "purge-network", false, "Also remove forge-net if no containers remain")
 	return cmd
 }
