@@ -77,7 +77,7 @@ func runCreateFromFlags(ctx context.Context, name, engineName, user, password, d
 	}
 
 	if name == "" {
-		return fmt.Errorf("preset name required as positional argument: forge docker create <name> --engine ...")
+		return fmt.Errorf("preset name required as positional argument — usage: forge docker create <name> --engine <engine>")
 	}
 	if err := preset.ValidateName(name); err != nil {
 		return err
